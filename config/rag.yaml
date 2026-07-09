@@ -1,0 +1,17 @@
+embedding:
+  provider: local          # local (MiniLM) | azure — the switch
+  local_model: sentence-transformers/all-MiniLM-L6-v2
+  azure_model: text-embedding-3-small
+  dimension: 384           # MiniLM=384, azure text-embedding-3-small=1536
+
+retrieval:
+  top_k: 5                 # how many results a search returns
+
+chroma:
+  persist_dir: data/chroma
+  collection: support_cases
+
+paths:
+  raw_csv: data/support_cases.csv
+  clean_jsonl: data/cases_clean.jsonl
+  review_jsonl: data/review_queue.jsonl
