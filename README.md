@@ -1,12 +1,21 @@
-# sewedy-support-bot — Instructor RAG SupportBot (Day 1 + Day 2)
+# sewedy-support-bot — RAG SupportBot + Web App
 
-An educational, enterprise-style Retrieval-Augmented-Generation "SupportBot". It models production
-instincts (typed config, secrets separation, provider abstraction, fail-fast validation, idempotent
-steps) while running **fully locally by default** — no cloud account required.
+An educational, enterprise-style Retrieval-Augmented-Generation "SupportBot." Started as a Day 1+2
+instructor-reference RAG pipeline (ingestion → embeddings → indexing → retrieval); has since grown into a
+full web application: a FastAPI backend with real authentication and Gemini-powered grounded answers, and a
+polished React frontend with English/Arabic support.
 
-This repo currently covers **Day 1 (ingestion)** and **Day 2 (embeddings + indexing + retrieval)**.
-Hybrid search, RAG answer generation, evaluation, and a UI are intentionally **not** built yet —
-later scope.
+> **Scope note:** the RAG pipeline (`src/rag/`) is the reviewed, verified Day 1+2 deliverable. Everything
+> under `backend/` and the React frontend is built on top of it, past the original assignment scope — see
+> `CLAUDE.md` for the current status and what still needs mentor sign-off.
+
+## What's in here
+
+| Layer | What it does |
+|---|---|
+| **RAG pipeline** (`src/rag/`) | CSV → clean/labelled JSONL → MiniLM embeddings → ChromaDB → semantic search |
+| **Backend** (`backend/`) | FastAPI: real auth (bcrypt + JWT + SQLite), Gemini-grounded chat, embedding-space visualization, Gmail password reset |
+| **Frontend** (React, `App.jsx`) | Landing page, auth flow, chat interface — English + Arabic (RTL), fully animated |
 
 ## Corpus
 
@@ -19,82 +28,128 @@ case_id, product, category, problem, cause, resolution
 Ingestion derives a labelled `text` field per row (`Product: … / Category: … / Problem: … / Cause: … /
 Resolution: …`, empty sections skipped) — that is the document we embed.
 
-## Pipeline
+**Known data gap (found during testing, not a code bug):** two complaint types have zero resolved cases
+anywhere in the corpus — "configuration resets after power cycle" (5 tickets, across 5 products) and "wrong
+serial number" (3 tickets). If real-world resolutions exist for these, add them to `support_cases.csv` and
+re-run `rag.ingest` + `rag.index` — no amount of prompting fixes a fact that was never recorded.
 
-```
-support_cases.csv (case_id, product, category, problem, cause, resolution)
-      │  profile → map columns → clean → build labelled text → quality gates
-      ▼
-cases_clean.jsonl        review_queue.jsonl   ← bad rows, never silently dropped
-      │  embed (MiniLM by default, Azure opt-in)
-      ▼
-ChromaDB (data/chroma, local, persistent)
-      │  embed query → cosine top-k
-      ▼
-semantic search results
-```
+## Part 1 — The RAG pipeline
 
-**Quality gates:** `missing_case_id`, `empty_problem`, `no_resolution` (while `REQUIRE_RESOLUTION=True`),
-`duplicate_case_id`. On the current corpus this is **69 rows → 57 clean / 12 review** (all 12 missing a
-resolution).
-
-## Requirements
-
+### Requirements
 - Windows / macOS / Linux, **Python 3.11**, and [**uv**](https://docs.astral.sh/uv/).
-- Everything runs locally. The default embedding model (MiniLM) downloads on first use (~90 MB).
+- Everything runs locally. MiniLM (~90 MB) downloads on first use.
 
-## Setup (new machine)
+### Setup
 
 ```bash
-git clone https://github.com/yousseffbassemm/sewedy-support-bot.git
-cd sewedy-support-bot
+uv python pin 3.11
 uv sync
 ```
 
-`uv sync` rebuilds the exact environment from `.python-version` + `uv.lock`.
-
-Azure embeddings are **opt-in** and only needed if you switch the provider:
+### Usage
 
 ```bash
-uv sync --extra azure
-cp .env.example .env      # then fill in your Azure values
-```
-
-## Usage
-
-```bash
-uv run python -m rag.config                       # print validated settings (fails loudly if config is bad)
+uv run python -m rag.config                       # print validated settings
 uv run python -m rag.ingest                       # → data/cases_clean.jsonl + data/review_queue.jsonl
 uv run python -m rag.index                        # embed + persist into data/chroma/
 uv run python -m rag.retrieve "readings drift higher after installation"
 uv run pytest -q                                  # fast offline unit tests
 ```
 
-Each retrieval hit prints `case_id`, `product`, `category`, `problem`, and cosine `distance`
-(smaller = closer). An out-of-domain query (e.g. *"how do I reset my password"*) intentionally returns only
-weak, high-distance hits — a teaching signal that this corpus is device support, not IT helpdesk.
+**Quality gates:** `missing_case_id`, `empty_problem`, `no_resolution`, `duplicate_case_id`. Current corpus:
+**69 rows → 57 clean / 12 review** (all 12 rejected for `no_resolution`).
 
-## Configuration
+## Part 2 — The backend (FastAPI)
 
-Non-secret settings live in [`config/rag.yaml`](config/rag.yaml) and are validated into typed Pydantic
-`Settings` at startup. Secrets (Azure credentials) live **only** in `.env` (git-ignored); commit
-`.env.example` as the template.
+Wraps the RAG pipeline behind a real API, adds accounts, and adds an LLM answer-writing layer.
 
-Switching the embedding provider (`local` ↔ `azure`) changes the vector dimension (MiniLM = 384,
-`text-embedding-3-small` = 1536). The index enforces a **dimension guard**, so after switching you must
-delete `data/chroma/` and re-index. See [DESIGN.md](DESIGN.md) for the rationale behind each decision.
+### Endpoints
+
+| Endpoint | What it does |
+|---|---|
+| `GET /health` | liveness + email mode (`console` or `gmail`) |
+| `POST /search` | raw semantic search, no LLM |
+| `POST /chat` | real RAG: retrieve → filter weak matches → Gemini writes a grounded reply |
+| `POST /embedding_map` | PCA/SVD-projected 2D view of the real embedding space, for the "see how this was found" panel |
+| `POST /auth/signup` | create account (bcrypt-hashed password, JWT returned immediately — no email step) |
+| `POST /auth/login` | check password, return JWT |
+| `POST /auth/forgot` / `POST /auth/reset` | email (or console-print) a 6-digit code, confirm + set new password |
+| `GET /auth/me` | who am I, from JWT |
+
+### Setup
+
+```bash
+uv add fastapi "uvicorn[standard]" sqlmodel bcrypt pyjwt "pydantic[email]" python-dotenv google-genai
+cp backend/.env.example backend/.env
+python -c "import secrets; print(secrets.token_urlsafe(48))"   # → paste into .env as JWT_SECRET
+```
+
+Fill in `backend/.env`:
+```
+JWT_SECRET=<generated above>
+GEMINI_API_KEY=<from https://aistudio.google.com/apikey — free tier available>
+GMAIL_ADDRESS=                # optional — leave blank for console-mode password reset codes
+GMAIL_APP_PASSWORD=           # optional — needs 2-Step Verification + an App Password
+```
+
+Run it (from the project root, so `rag` imports cleanly):
+```bash
+uv run uvicorn backend.main:app --reload --port 8000
+```
+
+### Key design points
+- **`/chat` never crashes on LLM failure** — falls back to a plain retrieval-only message if Gemini is
+  unavailable (no key, rate limit, network).
+- **Distance-threshold grounding guard** (`GOOD_MATCH_MAX_DISTANCE = 0.65` in `main.py`) — Gemini is never
+  shown a retrieved case whose cosine distance says it isn't actually relevant. This is enforced in code,
+  not just prompted for.
+- **Non-English queries are translated before retrieval** (`backend/llm.py::translate_to_english`) — MiniLM
+  is an English-only embedder, so an Arabic query embedded directly produces a near-meaningless vector.
+  Retrieval uses the English translation; the final reply still answers in the user's original language.
+- **Security honesty:** bcrypt + JWT + `.env` secrets is solid for a learning project / internal demo. It is
+  **not** hardened for production — no rate limiting, no account lockout, no HTTPS enforcement. Don't put
+  real employee credentials behind it without a security review first.
+
+## Part 3 — The frontend (React)
+
+Single-file React app (`App.jsx`) — landing page, auth flow, and chat interface, in English and Arabic.
+
+### Setup
+```bash
+npm create vite@latest supportbot-ui -- --template react
+cd supportbot-ui && npm install
+cp App.jsx src/App.jsx
+npm run dev
+```
+
+### Features
+- **Landing page** — animated hero, rotating live-demo chat preview, "how it works" / "coverage" sections
+  with scroll-triggered reveals
+- **Auth** — real signup/login/forgot-password against the backend, with a smooth crossfade between modes
+- **Chat** — real Gemini-grounded answers; a "searching by meaning" indicator; a **"see how this was found"**
+  disclosure showing the actual PCA-projected embedding space (your real corpus vectors, plotted, with the
+  query and retrieved matches highlighted) — the one feature that shows the underlying RAG concept visually
+  instead of just describing it
+- **English / Arabic (RTL)** — full UI translation, Cairo font for Arabic, direction-aware layout. Example
+  queries stay in English on purpose (the search backend is English-only; translated example queries would
+  silently stop working when clicked)
 
 ## Layout
 
 ```
-config/rag.yaml                     typed, non-secret settings
-data/                                inputs + outputs (data/chroma/ is git-ignored)
-src/rag/config.py                   YAML → validated Pydantic Settings
-src/rag/ingest.py       (Day 1)     profile → map → clean → build labelled text → gates → JSONL
-src/rag/embeddings.py   (Day 2)     provider-agnostic Embedder (local MiniLM + Azure)
-src/rag/index.py        (Day 2)     embed corpus → persist ChromaDB collection (dimension guard)
-src/rag/retrieve.py     (Day 2)     semantic top-k search
-tests/test_ingest.py                pure-function unit tests
-CLAUDE.md                           project memory / build status (single source of truth)
-DESIGN.md                           decisions, tradeoffs, and how-to-teach notes
+config/rag.yaml                     typed, non-secret RAG settings
+data/                                inputs + outputs (data/chroma/, data/support_cases.csv, etc.)
+src/rag/                             Day 1+2 pipeline (ingest, embeddings, index, retrieve, config)
+backend/
+  main.py                           FastAPI app — all endpoints
+  auth.py                           bcrypt + JWT
+  db.py                             SQLModel User table (SQLite)
+  email_utils.py                    Gmail SMTP with console fallback
+  llm.py                            Gemini grounded replies + query translation
+  embedding_map.py                  PCA/SVD projection of the real embedding space
+App.jsx                              full React frontend (landing + auth + chat)
+tests/test_ingest.py                 pure-function unit tests (Day 1)
+CLAUDE.md                            project memory / current status (single source of truth)
+DESIGN.md                            decisions, tradeoffs, bugs found and fixed
+SETUP_GUIDE.md                       step-by-step: get the whole stack running from scratch
 ```
