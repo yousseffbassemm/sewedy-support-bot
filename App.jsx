@@ -110,10 +110,10 @@ const THEME_CSS = `
        clears it at 6:1. Surfaces and large type keep #E30613. */
     --c-redInk: #B00410;
 
-    --wash1: rgba(227,6,19,.05);
-    --wash2: rgba(255,150,70,.055);
-    --wash3: rgba(80,120,255,.045);
-    --grain-opacity: .022;
+    --wash1: rgba(227,6,19,.08);
+    --wash2: rgba(255,150,70,.088);
+    --wash3: rgba(80,120,255,.072);
+    --grain-opacity: .03;
 
     /* Shadows carry a little brand warmth instead of neutral grey. This is
        the difference between a card looking placed on the page and looking
@@ -297,21 +297,44 @@ const THEME_CSS = `
      bright top edge. Grey shadows on a warm paper background are the single
      most common reason a light UI looks unfinished -- the shadow reads as
      dirt on the page instead of light falling across it. */
-  .stepCard, .pop {
+  /* Scoped with html[data-theme="light"] purely for specificity. THEME_CSS is
+     injected near the top of the stylesheet, and the base .stepCard /
+     .primaryBtn / .authBtnAnim rules are declared further down -- at equal
+     specificity the later rule wins, so an unscoped ".stepCard { ... }" here
+     is silently overridden and nothing changes. The dark rules only worked
+     because their attribute selector already outranked the base ones. */
+  html[data-theme="light"] .stepCard,
+  html[data-theme="light"] .pop {
     box-shadow: inset 0 1px 0 var(--lift-top),
-                0 1px 2px rgba(var(--shadow-tint),.05),
-                0 8px 24px rgba(var(--shadow-tint),.07);
+                0 1px 2px rgba(var(--shadow-tint),.06),
+                0 10px 28px rgba(var(--shadow-tint),.09);
   }
-  .stepCard:hover {
+  html[data-theme="light"] .stepCard:hover {
     box-shadow: inset 0 1px 0 var(--lift-top),
-                0 2px 6px rgba(var(--shadow-tint),.07),
-                0 18px 38px rgba(var(--shadow-tint),.12);
+                0 2px 6px rgba(var(--shadow-tint),.09),
+                0 20px 42px rgba(var(--shadow-tint),.15);
   }
-  .primaryBtn, .sendBtn, .authBtnAnim {
-    box-shadow: 0 2px 6px rgba(var(--c-red-rgb),.22), 0 8px 22px rgba(var(--c-red-rgb),.20);
+  /* .primaryBtn is intentionally absent: it runs the pulseGlow animation,
+     and animated properties beat normal declarations in the cascade, so any
+     box-shadow set here would be dead. It already pulses on --c-red-rgb, so
+     it tracks the theme by itself. */
+  html[data-theme="light"] .sendBtn,
+  html[data-theme="light"] .authBtnAnim {
+    box-shadow: 0 2px 6px rgba(var(--c-red-rgb),.24), 0 10px 24px rgba(var(--c-red-rgb),.22);
   }
-  .primaryBtn:hover, .sendBtn:hover, .authBtnAnim:hover {
-    box-shadow: 0 4px 10px rgba(var(--c-red-rgb),.28), 0 14px 32px rgba(var(--c-red-rgb),.28);
+  html[data-theme="light"] .sendBtn:hover,
+  html[data-theme="light"] .authBtnAnim:hover {
+    box-shadow: 0 4px 10px rgba(var(--c-red-rgb),.30), 0 16px 34px rgba(var(--c-red-rgb),.30);
+  }
+  /* Cards and bubbles pick up the warm shadow too -- these carry the base
+     neutral-grey two-layer shadow set further down the sheet. */
+  html[data-theme="light"] .botBubbleHover:hover {
+    box-shadow: inset 0 1px 0 var(--lift-top),
+                0 14px 34px rgba(var(--shadow-tint),.13);
+  }
+  html[data-theme="light"] .chipHover:hover,
+  html[data-theme="light"] .suggestBtn:hover {
+    box-shadow: 0 8px 22px rgba(var(--c-red-rgb),.18);
   }
 
   /* Surfaces get a top highlight, as if lit from above, plus a deeper
@@ -331,12 +354,10 @@ const THEME_CSS = `
   }
 
   /* Brand-red controls glow instead of casting a shadow nothing can see. */
-  html[data-theme="dark"] .primaryBtn,
   html[data-theme="dark"] .sendBtn,
   html[data-theme="dark"] .authBtnAnim {
     box-shadow: 0 6px 22px rgba(var(--c-red-rgb),.34);
   }
-  html[data-theme="dark"] .primaryBtn:hover,
   html[data-theme="dark"] .sendBtn:hover,
   html[data-theme="dark"] .authBtnAnim:hover {
     box-shadow: 0 10px 30px rgba(var(--c-red-rgb),.48);
