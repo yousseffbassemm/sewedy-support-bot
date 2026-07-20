@@ -96,7 +96,13 @@ const THEME_CSS = `
   }
 
   html[data-theme="dark"] {
-    --c-red: #FF4B57;
+    /* Brand hue (356.5deg) at FULL saturation, lifted in lightness only.
+       Exact #E30613 is 3.8:1 on this background and the red text here is all
+       12-13.5px, which is under AA. The earlier fix over-corrected to a 65%
+       lightness that desaturated toward salmon and read visibly pale -- the
+       pink came from the blue channel climbing, not from the brightness.
+       57% keeps it unmistakably the same red and clears AA on paper and card. */
+    --c-red: #FF2431;
     --c-redDark: #E30613;
     --c-ink: #ECEAE6;
     --c-paper: #131211;
@@ -105,7 +111,7 @@ const THEME_CSS = `
     --c-mute: #A29B92;
     --c-ok: #3ECF7F;
 
-    --c-red-rgb: 255,75,87;
+    --c-red-rgb: 255,36,49;
     --c-ok-rgb: 62,207,127;
     --c-shadow-rgb: 0,0,0;
     --c-tint-rgb: 255,255,255;
@@ -243,6 +249,11 @@ const TRANSLATIONS = {
     mapCaption: (n) =>
       `${n} cases, projected from 384 dimensions down to 2 with PCA — distance here approximates, but doesn't replace, the real cosine search.`,
     langToggle: "العربية",
+    backToTop: "Back to top",
+    backToHome: "Back to home",
+    menuLabel: "Menu",
+    helpfulLabel: "Helpful",
+    notHelpfulLabel: "Not helpful",
     themeToDark: "Switch to dark mode",
     themeToLight: "Switch to light mode",
     authArtTagline: "Faster field resolutions, grounded in every case your team has already solved.",
@@ -345,6 +356,11 @@ const TRANSLATIONS = {
     mapCaption: (n) =>
       `${n} حالة، تم إسقاطها من 384 بُعداً إلى بُعدين باستخدام PCA — المسافة هنا تقريبية، ولا تُغني عن البحث الحقيقي بالتشابه الجيبي.`,
     langToggle: "English",
+    backToTop: "العودة إلى الأعلى",
+    backToHome: "العودة إلى الصفحة الرئيسية",
+    menuLabel: "القائمة",
+    helpfulLabel: "مفيد",
+    notHelpfulLabel: "غير مفيد",
     themeToDark: "التبديل إلى الوضع الليلي",
     themeToLight: "التبديل إلى الوضع النهاري",
     authArtTagline: "حلول ميدانية أسرع، مبنية على كل حالة قام فريقك بحلّها بالفعل.",
@@ -651,7 +667,18 @@ function Landing({ onStart, session }) {
   return (
     <div style={styles.landingWrap}>
       <header style={styles.nav}>
-        <div className="logoWiggle"><Logo height={30} /></div>
+        {/* A real button, not a decorative div: the hover state now implies
+            it is clickable, so it needs to actually do something and be
+            reachable by keyboard. */}
+        <button
+          className="logoWiggle"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label={t.backToTop}
+          title={t.backToTop}
+          style={{ background: "none", border: "none", padding: 0 }}
+        >
+          <Logo height={30} />
+        </button>
         <nav style={styles.navLinks}>
           <a style={styles.navLink} href="#how">{t.navHow}</a>
           <a style={styles.navLink} href="#cases">{t.navCoverage}</a>
@@ -1360,7 +1387,8 @@ function Chat({ session, onHome, onSignOut }) {
           <button
             onClick={onHome}
             className="logoWiggle"
-            title="Back to home"
+            title={t.backToHome}
+            aria-label={t.backToHome}
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
           >
             <Logo height={38} />
@@ -1407,7 +1435,7 @@ function Chat({ session, onHome, onSignOut }) {
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <button
                 className="mobileMenuBtn"
-                aria-label="Menu"
+                aria-label={t.menuLabel}
                 onClick={() => setMenuOpen(true)}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
@@ -1530,7 +1558,7 @@ function CopyButton({ text }) {
 // forget (a failed vote must never disrupt the chat). Closes the quality loop.
 function AnswerFeedback({ query, caseId }) {
   const [voted, setVoted] = useState(null); // "up" | "down" | null
-  const { lang } = useLang();
+  const { lang, t } = useLang();
   const txt =
     lang === "ar"
       ? { prompt: "هل كان هذا مفيدًا؟", thanks: "شكرًا على ملاحظتك!" }
@@ -1552,8 +1580,8 @@ function AnswerFeedback({ query, caseId }) {
   return (
     <>
       <span style={{ fontSize: 12, color: C.mute, marginInlineStart: 2 }}>{txt.prompt}</span>
-      <button className="answerBtn up" onClick={() => send("up")} aria-label="Helpful" title="Helpful">👍</button>
-      <button className="answerBtn down" onClick={() => send("down")} aria-label="Not helpful" title="Not helpful">👎</button>
+      <button className="answerBtn up" onClick={() => send("up")} aria-label={t.helpfulLabel} title={t.helpfulLabel}>👍</button>
+      <button className="answerBtn down" onClick={() => send("down")} aria-label={t.notHelpfulLabel} title={t.notHelpfulLabel}>👎</button>
     </>
   );
 }
@@ -1871,7 +1899,27 @@ function GlobalStyle() {
       .sendBtn:hover { transform: scale(1.08) rotate(4deg); }
       .sendBtn:active { transform: scale(.9); }
 
-      .logoWiggle:hover svg { animation: wiggle .4s ease; }
+      /* Was ".logoWiggle:hover svg" -- dead since the mark became a real <img>
+         (it was an inline SVG originally), so the logo had no hover at all. */
+      .logoWiggle { display: inline-flex; cursor: pointer; }
+      .logoWiggle img {
+        transition: transform .32s cubic-bezier(.34,1.56,.64,1), filter .32s ease;
+        transform-origin: center bottom;
+      }
+      .logoWiggle:hover img {
+        transform: translateY(-2px) scale(1.045);
+        /* Glow tinted with the live brand red so it tracks the theme. */
+        filter: drop-shadow(0 4px 10px rgba(var(--c-red-rgb),.34));
+      }
+      .logoWiggle:active img { transform: translateY(0) scale(1.01); transition-duration: .1s; }
+      .logoWiggle:focus-visible { outline: none; }
+      .logoWiggle:focus-visible img {
+        transform: translateY(-2px) scale(1.045);
+        filter: drop-shadow(0 4px 10px rgba(var(--c-red-rgb),.34));
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .logoWiggle img, .logoWiggle:hover img, .logoWiggle:active img { transform: none; transition: none; }
+      }
 
       .arcAccent { animation: shimmerArc 2.4s ease-in-out infinite; transform-origin: center; }
 
