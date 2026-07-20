@@ -993,11 +993,17 @@ function Chat({ session, onHome, onSignOut }) {
     // Greet only on the very first question: true iff no user message has been
     // sent yet this chat. The opening bubble is the bot's own, so it doesn't count.
     const isFirst = !messages.some((m) => m.who === "user");
+    // Recent turns for conversational memory, so a follow-up ("and it still
+    // fails") has context. Only real text turns, last 6, mapped to {role,text}.
+    const history = messages
+      .filter((m) => m.text && (m.kind === "text" || m.kind === "answer"))
+      .slice(-6)
+      .map((m) => ({ role: m.who, text: m.text }));
     setMessages((m) => [...m, { who: "user", kind: "text", text: q }]);
     setInput("");
     setBusy(true);
     try {
-      const r = await api("/chat", { query: q, first: isFirst });
+      const r = await api("/chat", { query: q, first: isFirst, history });
       setBusy(false);
       setMessages((m) => [
         ...m,

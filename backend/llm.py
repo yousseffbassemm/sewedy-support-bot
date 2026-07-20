@@ -201,6 +201,27 @@ def _format_product_summary(summary: dict) -> str:
     )
 
 
+def _format_history(history: list[dict] | None) -> str:
+    """Render the last few turns as plain context. Labelled 'context only' so
+    the model can resolve a follow-up ('and it still fails') without ever
+    mistaking a prior message for a retrieved case to quote."""
+    if not history:
+        return ""
+    lines = []
+    for turn in history[-6:]:  # a short window is enough and keeps tokens down
+        role = "User" if turn.get("role") == "user" else "Assistant"
+        text = (turn.get("text") or "").strip()
+        if text:
+            lines.append(f"{role}: {text}")
+    if not lines:
+        return ""
+    return (
+        "Prior conversation (context only -- NOT a source of cases to quote):\n"
+        + "\n".join(lines)
+        + "\n\n"
+    )
+
+
 def _format_context(hits: list[dict]) -> str:
     """Lay each case out as discrete labelled fields.
 
@@ -241,6 +262,7 @@ def generate_reply(
     hits: list[dict],
     greet: bool = False,
     product_summary: dict | None = None,
+    history: list[dict] | None = None,
 ) -> str:
     """Ask Gemini for a short, grounded reply.
 
@@ -265,7 +287,9 @@ def generate_reply(
     system_instruction = (
         _SYSTEM_PROMPT + mode_rule + (_GREETING_RULE if greet else _NO_GREETING_RULE)
     )
-    user_content = f"User message: {query}\n\nRetrieved cases:\n{context}"
+    user_content = (
+        f"{_format_history(history)}User message: {query}\n\nRetrieved cases:\n{context}"
+    )
 
     # Cache on everything that shapes the answer, so an identical repeat costs
     # no API call (and stays stable across the free tier's rate limits).

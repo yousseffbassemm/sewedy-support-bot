@@ -130,6 +130,21 @@ def test_chat_rejects_empty_query(client):
     assert r.status_code == 400
 
 
+def test_chat_accepts_conversation_history(client):
+    r = client.post(
+        "/chat",
+        json={
+            "query": "and it still fails",
+            "history": [
+                {"role": "user", "text": "AeroSense G3 firmware update"},
+                {"role": "bot", "text": "Re-flash on a stable supply."},
+            ],
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["reply"] == "MOCK GROUNDED REPLY"
+
+
 # --- auth -------------------------------------------------------------------
 
 def test_signup_ok(client):

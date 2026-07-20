@@ -175,6 +175,10 @@ class ChatRequest(BaseModel):
     # greeting once instead of on every message. Defaults False so any caller
     # that omits it (older frontend, direct API use) simply never greets.
     first: bool = False
+    # Recent turns [{role: "user"|"bot", text: str}], for conversational
+    # continuity. Optional -- an older client that omits it just gets the
+    # previous single-turn behavior.
+    history: list[dict] | None = None
 
 
 class ChatResponse(BaseModel):
@@ -245,7 +249,9 @@ def chat(req: ChatRequest, request: Request) -> dict:
     product_summary = detect_product_query(search_query, _SETTINGS)
     if product_summary is not None:
         try:
-            reply = generate_reply(q, [], greet=req.first, product_summary=product_summary)
+            reply = generate_reply(
+                q, [], greet=req.first, product_summary=product_summary, history=req.history
+            )
             return {"reply": reply, "hits": [], "grounded": True}
         except Exception as exc:  # noqa: BLE001 -- never crash chat
             print(f"[chat] Gemini unavailable for product summary: {exc}")
@@ -271,7 +277,7 @@ def chat(req: ChatRequest, request: Request) -> dict:
     grounding_hits = [h for h in hits if h["distance"] <= GOOD_MATCH_MAX_DISTANCE]
 
     try:
-        reply = generate_reply(q, grounding_hits, greet=req.first)
+        reply = generate_reply(q, grounding_hits, greet=req.first, history=req.history)
         return {"reply": reply, "hits": hits, "grounded": True}
     except Exception as exc:  # noqa: BLE001 -- deliberately broad: never crash chat
         print(f"[chat] Gemini unavailable, falling back to retrieval-only: {exc}")
