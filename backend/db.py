@@ -52,6 +52,23 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class Feedback(SQLModel, table=True):
+    """One thumbs-up / thumbs-down on an answer.
+
+    Stores the query and (optionally) the case the answer was grounded in, so
+    the team can later see which questions the bot answers well and which need
+    a better case in the knowledge base -- a real quality signal, captured at
+    the moment of use.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    query: str
+    case_id: Optional[str] = Field(default=None, index=True)
+    vote: str  # "up" | "down"
+    user_email: Optional[str] = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 def init_db() -> None:
     """Create tables if they don't exist. Called once on app startup."""
     SQLModel.metadata.create_all(engine)

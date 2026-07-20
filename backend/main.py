@@ -47,7 +47,7 @@ from backend.auth import (
     hash_password,
     verify_password,
 )
-from backend.db import User, get_session, init_db
+from backend.db import Feedback, User, get_session, init_db
 from backend.email_utils import email_mode, send_code
 from backend.embedding_map import EmbeddingMap
 from backend.llm import generate_reply, translate_to_english
@@ -496,3 +496,46 @@ def me(token: str, session: Session = Depends(get_session)) -> dict:
     if not user:
         raise HTTPException(404, "User not found.")
     return {"username": user.username, "email": user.email}
+
+
+# ---------------------------------------------------------------------------
+# Feedback (thumbs up/down on answers)
+# ---------------------------------------------------------------------------
+class FeedbackRequest(BaseModel):
+    query: str
+    vote: str  # "up" | "down"
+    case_id: str | None = None
+    token: str | None = None  # optional: attribute the vote to a logged-in user
+
+
+@app.post("/feedback")
+def submit_feedback(
+    req: FeedbackRequest, request: Request, session: Session = Depends(get_session)
+) -> dict:
+    """Record a thumbs up/down on an answer. Anonymous unless a valid token is
+    supplied. This is the quality signal that closes the loop: it shows which
+    questions the bot answers well and which need a better case added."""
+    rate_limit(request, "feedback", max_requests=60, window_seconds=60)
+    if req.vote not in ("up", "down"):
+        raise HTTPException(400, "vote must be 'up' or 'down'.")
+
+    email = decode_token(req.token) if req.token else None
+    session.add(
+        Feedback(
+            query=req.query.strip()[:500],
+            case_id=req.case_id,
+            vote=req.vote,
+            user_email=email,
+        )
+    )
+    session.commit()
+    return {"ok": True}
+
+
+@app.get("/feedback/stats")
+def feedback_stats(session: Session = Depends(get_session)) -> dict:
+    """Aggregate up/down counts -- a tiny analytics surface for an admin view."""
+    votes = session.exec(select(Feedback)).all()
+    up = sum(1 for v in votes if v.vote == "up")
+    down = sum(1 for v in votes if v.vote == "down")
+    return {"up": up, "down": down, "total": up + down}

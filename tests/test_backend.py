@@ -171,6 +171,20 @@ def test_signup_rate_limited(client):
     assert any(c == 200 for c in codes[:5])
 
 
+# --- feedback ---------------------------------------------------------------
+
+def test_feedback_records_and_aggregates(client):
+    assert client.post("/feedback", json={"query": "firmware fails", "vote": "up", "case_id": "9999-0001"}).status_code == 200
+    assert client.post("/feedback", json={"query": "no display", "vote": "down"}).status_code == 200
+    stats = client.get("/feedback/stats").json()
+    assert stats == {"up": 1, "down": 1, "total": 2}
+
+
+def test_feedback_rejects_bad_vote(client):
+    r = client.post("/feedback", json={"query": "x", "vote": "meh"})
+    assert r.status_code == 400
+
+
 def test_login_lockout_after_repeated_failures(client, engine):
     _make_verified_user(engine, email="lock@elsewedy.com")
     # 5 wrong attempts arm the lock; the next attempt is refused with 429 even

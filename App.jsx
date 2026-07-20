@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect, useContext, createContext } from "react";
 
 /* ============================================================================
    Elsewedy Electric — SupportBot  (BACKEND-CONNECTED build)
@@ -48,11 +48,203 @@ const C = {
 };
 
 // ---------------------------------------------------------------------------
-// Logo — the real Elsewedy Electric mark (public/logo.png, white background
-// removed so it drops cleanly onto any surface). `mono` inverts it to solid
-// white for dark/branded backgrounds; `animateArc` gives a soft reveal on the
-// auth splash. Props kept identical to the old inline-SVG version so every
-// call site works unchanged.
+// i18n — English / Arabic (RTL)
+// ---------------------------------------------------------------------------
+// Honest scope note: this translates the UI chrome. The actual search
+// backend (MiniLM embeddings + your case corpus) is English-only, so the
+// example queries stay in English — they need to retrieve real results,
+// and translating them would silently break that. A query typed in Arabic
+// will still reach the real backend, but won't match the English corpus
+// well, same as any other out-of-domain query.
+const TRANSLATIONS = {
+  en: {
+    navHow: "How it works",
+    navCoverage: "Coverage",
+    navSignIn: "Sign in",
+    navContinue: (name) => `Continue as ${name}`,
+    eyebrow: "Field Support · Internal Tool",
+    heroLine1: "Answers from every",
+    heroLine2: "resolved support case,",
+    heroLine3: "in seconds.",
+    heroSub:
+      "SupportBot searches Elsewedy's device knowledge base by meaning, not just keywords — surfacing the closest past cases, their causes, and the fixes that worked.",
+    getStarted: "Get started",
+    openApp: "Open SupportBot",
+    seeHow: "See how it works →",
+    howTitle: "How it works",
+    step1Title: "Ask in plain words",
+    step1Text:
+      "Describe the symptom the way an engineer would in the field. No error-code lookup tables needed.",
+    step2Title: "Search by meaning",
+    step2Text:
+      "Every past case is embedded as a vector. SupportBot finds the closest matches — even with zero shared keywords.",
+    step3Title: "Get the fix",
+    step3Text:
+      "See the matched case, its root cause, and the resolution that actually worked, ranked by closeness.",
+    coverageTitle: "What it covers",
+    coverageNote:
+      "Connectivity · Configuration · Display · Power · Installation · Firmware · Mechanical · Measurement",
+    footerNote: "Internal support tool · Demo build",
+    previewLabel: "SupportBot",
+    // Auth
+    signInTitle: "Sign in",
+    signInSub: "Welcome back. Pick up where you left off.",
+    email: "Email",
+    password: "Password",
+    signInBtn: "Sign in",
+    forgotLink: "Forgot password?",
+    newHere: "New here?",
+    createAccount: "Create account",
+    createTitle: "Create account",
+    createSub: "One minute, and SupportBot is yours.",
+    username: "Username",
+    continueBtn: "Continue",
+    alreadyHave: "Already have an account?",
+    forgotTitle: "Forgot password",
+    forgotSub: "Enter your email and we'll send a reset code.",
+    sendCode: "Send reset code",
+    backToSignIn: "← Back to sign in",
+    resetTitle: "Reset password",
+    resetCodeLabel: "6-digit code",
+    newPassword: "New password",
+    updatePassword: "Update password",
+    doneTitle: "Password updated",
+    doneSub: "You can sign in with your new password now.",
+    doneNotice: "All set — your password has been changed.",
+    backToSignInBtn: "Back to sign in",
+    backHome: "← Back",
+    // Chat
+    chatTitle: "SupportBot",
+    chatSubtitle: (n) => `Searches by meaning across ${n} resolved cases`,
+    live: "Live",
+    tryAsking: "Try asking",
+    signOut: "Sign out",
+    composerPlaceholder: "Describe the issue…",
+    welcome: (name) =>
+      `Hi ${name || "there"} — describe a device issue and I'll find the closest resolved cases.`,
+    searching: "Searching by meaning…",
+    seeHowFound: "See how this was found",
+    mapLoading: "Projecting the embedding space…",
+    mapError: (msg) => `Couldn't load the map: ${msg}`,
+    legendQuery: "Your query",
+    legendMatch: "Retrieved match",
+    legendOther: "Other cases in the corpus",
+    mapCaption: (n) =>
+      `${n} cases, projected from 384 dimensions down to 2 with PCA — distance here approximates, but doesn't replace, the real cosine search.`,
+    langToggle: "العربية",
+    authArtTagline: "Faster field resolutions, grounded in every case your team has already solved.",
+    errInvalidEmail: "Enter a valid email address.",
+    errPasswordShort: "Password must be at least 6 characters.",
+    errUsernameShort: "Pick a username (2+ characters).",
+    signingIn: "Signing in…",
+    creatingAccount: "Creating account…",
+    sendingCode: "Sending…",
+    updating: "Updating…",
+    atLeast6: "At least 6 characters",
+    resetCodeSentPre: "Enter the code sent to",
+    resetCodeSentPost: "and choose a new password.",
+    consoleModeNotice:
+      "Server is in console mode — no real email sent. Check the terminal running the backend for your code.",
+    codeSentNotice: "Code sent — check your inbox (and spam).",
+  },
+  ar: {
+    navHow: "كيف يعمل",
+    navCoverage: "التغطية",
+    navSignIn: "تسجيل الدخول",
+    navContinue: (name) => `متابعة باسم ${name}`,
+    eyebrow: "الدعم الميداني · أداة داخلية",
+    heroLine1: "إجابات من كل حالة",
+    heroLine2: "دعم تم حلّها،",
+    heroLine3: "خلال ثوانٍ.",
+    heroSub:
+      "يبحث SupportBot في قاعدة معرفة الأجهزة الخاصة بالسويدي عبر المعنى، لا الكلمات المفتاحية فقط — ليعرض أقرب الحالات السابقة، وأسبابها، والحلول التي نجحت.",
+    getStarted: "ابدأ الآن",
+    openApp: "فتح SupportBot",
+    seeHow: "← شاهد كيف يعمل",
+    howTitle: "كيف يعمل",
+    step1Title: "اسأل بكلماتك",
+    step1Text: "صف العرض كما يفعل المهندس في الميدان. لا حاجة لجداول أكواد الأعطال.",
+    step2Title: "بحث بالمعنى",
+    step2Text:
+      "كل حالة سابقة مخزّنة كمتجه رياضي. يجد SupportBot أقرب الحالات — حتى بدون أي كلمة مشتركة.",
+    step3Title: "احصل على الحل",
+    step3Text: "شاهد الحالة المطابقة، سببها الجذري، والحل الذي نجح فعلاً، مرتبة حسب القرب.",
+    coverageTitle: "ما الذي تغطيه",
+    coverageNote:
+      "الاتصال · الإعدادات · الشاشة · الطاقة · التركيب · البرنامج الثابت · الميكانيكا · القياس",
+    footerNote: "أداة دعم داخلية · نسخة تجريبية",
+    previewLabel: "SupportBot",
+    // Auth
+    signInTitle: "تسجيل الدخول",
+    signInSub: "أهلاً بعودتك. تابع من حيث توقفت.",
+    email: "البريد الإلكتروني",
+    password: "كلمة المرور",
+    signInBtn: "تسجيل الدخول",
+    forgotLink: "نسيت كلمة المرور؟",
+    newHere: "جديد هنا؟",
+    createAccount: "إنشاء حساب",
+    createTitle: "إنشاء حساب",
+    createSub: "دقيقة واحدة، و SupportBot أصبح لك.",
+    username: "اسم المستخدم",
+    continueBtn: "متابعة",
+    alreadyHave: "لديك حساب بالفعل؟",
+    forgotTitle: "نسيت كلمة المرور",
+    forgotSub: "أدخل بريدك الإلكتروني وسنرسل رمز إعادة التعيين.",
+    sendCode: "إرسال رمز إعادة التعيين",
+    backToSignIn: "→ العودة لتسجيل الدخول",
+    resetTitle: "إعادة تعيين كلمة المرور",
+    resetCodeLabel: "رمز مكوّن من 6 أرقام",
+    newPassword: "كلمة المرور الجديدة",
+    updatePassword: "تحديث كلمة المرور",
+    doneTitle: "تم تحديث كلمة المرور",
+    doneSub: "يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.",
+    doneNotice: "تم — تم تغيير كلمة المرور بنجاح.",
+    backToSignInBtn: "العودة لتسجيل الدخول",
+    backHome: "→ رجوع",
+    // Chat
+    chatTitle: "SupportBot",
+    chatSubtitle: (n) => `يبحث بالمعنى عبر ${n} حالة تم حلّها`,
+    live: "متصل",
+    tryAsking: "جرّب أن تسأل",
+    signOut: "تسجيل الخروج",
+    composerPlaceholder: "صف المشكلة…",
+    welcome: (name) =>
+      `مرحباً ${name || "بك"} — صف مشكلة الجهاز وسأجد أقرب الحالات التي تم حلّها.`,
+    searching: "يبحث بالمعنى…",
+    seeHowFound: "شاهد كيف تم إيجاد هذا",
+    mapLoading: "جارٍ إسقاط فضاء المتجهات…",
+    mapError: (msg) => `تعذّر تحميل الخريطة: ${msg}`,
+    legendQuery: "سؤالك",
+    legendMatch: "نتيجة مطابقة",
+    legendOther: "حالات أخرى في قاعدة البيانات",
+    mapCaption: (n) =>
+      `${n} حالة، تم إسقاطها من 384 بُعداً إلى بُعدين باستخدام PCA — المسافة هنا تقريبية، ولا تُغني عن البحث الحقيقي بالتشابه الجيبي.`,
+    langToggle: "English",
+    authArtTagline: "حلول ميدانية أسرع، مبنية على كل حالة قام فريقك بحلّها بالفعل.",
+    errInvalidEmail: "أدخل بريداً إلكترونياً صحيحاً.",
+    errPasswordShort: "يجب ألا تقل كلمة المرور عن 6 أحرف.",
+    errUsernameShort: "اختر اسم مستخدم (حرفان على الأقل).",
+    signingIn: "جارٍ تسجيل الدخول…",
+    creatingAccount: "جارٍ إنشاء الحساب…",
+    sendingCode: "جارٍ الإرسال…",
+    updating: "جارٍ التحديث…",
+    atLeast6: "6 أحرف على الأقل",
+    resetCodeSentPre: "أدخل الرمز المُرسَل إلى",
+    resetCodeSentPost: "واختر كلمة مرور جديدة.",
+    consoleModeNotice:
+      "الخادم في وضع الطرفية — لم يُرسل بريد فعلي. تحقق من الطرفية التي تُشغّل الخادم للحصول على الرمز.",
+    codeSentNotice: "تم إرسال الرمز — تحقق من بريدك (ومجلد الرسائل غير المرغوب فيها).",
+  },
+};
+
+const LangContext = createContext({ lang: "en", t: TRANSLATIONS.en, dir: "ltr", toggleLang: () => {} });
+const useLang = () => useContext(LangContext);
+
+// ---------------------------------------------------------------------------
+// Logo — the real Elsewedy Electric mark (public/logo.png). `mono` renders it
+// white for dark/branded backgrounds; `animateArc` gives it a soft reveal on
+// the auth splash. Props are kept identical to the old inline-SVG version so
+// every call site works unchanged.
 // ---------------------------------------------------------------------------
 function Logo({ height = 34, mono = false, animateArc = false }) {
   return (
@@ -64,6 +256,8 @@ function Logo({ height = 34, mono = false, animateArc = false }) {
         height,
         width: "auto",
         display: "block",
+        // The source art is black text + a red arc; invert it to solid white
+        // for use on dark panels.
         filter: mono ? "brightness(0) invert(1)" : "none",
         animation: animateArc ? "logoReveal 0.7s ease forwards" : undefined,
       }}
@@ -86,10 +280,52 @@ function Arc({ width = 120, stroke = C.red, sw = 5 }) {
   );
 }
 
+// Reveals its children with a rise+fade the moment they actually scroll into
+// view, instead of animating once at page load (which had already finished
+// long before you'd scrolled down to "How it works" or "Coverage").
+function Reveal({ children, delay = 0, style }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          io.disconnect(); // reveal once; don't re-hide when scrolling away
+        }
+      },
+      { threshold: 0.15 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        ...style,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(28px)",
+        transition: `opacity .7s cubic-bezier(.16,1,.3,1) ${delay}s, transform .7s cubic-bezier(.16,1,.3,1) ${delay}s`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
 const emailOk = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+
+// Size of the indexed corpus — shown in the chat header. Matches the real
+// clean-case count from ingestion (69 raw → 66 clean).
+const CASE_COUNT = 66;
 
 // ===========================================================================
 // Root
@@ -97,175 +333,334 @@ const emailOk = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 export default function App() {
   const [route, setRoute] = useState("landing"); // landing | auth | app
   const [session, setSession] = useState(null); // {username, email, token}
+  const [lang, setLang] = useState("en"); // en | ar
+
+  const dir = lang === "ar" ? "rtl" : "ltr";
+  const t = TRANSLATIONS[lang];
+  const toggleLang = () => setLang((l) => (l === "en" ? "ar" : "en"));
 
   return (
-    <div style={styles.root}>
-      <GlobalStyle />
-      {route === "landing" && <Landing onStart={() => setRoute("auth")} />}
-      {route === "auth" && (
-        <Auth
-          onAuthed={(u) => {
-            setSession(u);
-            setRoute("app");
-          }}
-          onHome={() => setRoute("landing")}
-        />
-      )}
-      {route === "app" && (
-        <Chat
-          session={session}
-          onSignOut={() => {
-            setSession(null);
-            setRoute("landing");
-          }}
-        />
-      )}
-    </div>
+    <LangContext.Provider value={{ lang, t, dir, toggleLang }}>
+      <div style={styles.root} dir={dir} className={lang === "ar" ? "langAr" : "langEn"}>
+        <GlobalStyle />
+        <div key={route} className="pageIn">
+          {route === "landing" && (
+            <Landing session={session} onStart={() => setRoute(session ? "app" : "auth")} />
+          )}
+          {route === "auth" && (
+            <Auth
+              onAuthed={(u) => {
+                setSession(u);
+                setRoute("app");
+              }}
+              onHome={() => setRoute("landing")}
+            />
+          )}
+          {route === "app" && (
+            <Chat
+              session={session}
+              onHome={() => setRoute("landing")}
+              onSignOut={() => {
+                setSession(null);
+                setRoute("landing");
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </LangContext.Provider>
   );
 }
 
 // ===========================================================================
 // Landing
 // ===========================================================================
-function Landing({ onStart }) {
+function Landing({ onStart, session }) {
+  const { t, dir, toggleLang } = useLang();
   return (
     <div style={styles.landingWrap}>
       <header style={styles.nav}>
-        <Logo height={30} />
+        <div className="logoWiggle"><Logo height={30} /></div>
         <nav style={styles.navLinks}>
-          <a style={styles.navLink} href="#how">How it works</a>
-          <a style={styles.navLink} href="#cases">Coverage</a>
-          <button style={styles.navBtn} onClick={onStart}>
-            Sign in
+          <a style={styles.navLink} href="#how">{t.navHow}</a>
+          <a style={styles.navLink} href="#cases">{t.navCoverage}</a>
+          <button style={styles.langBtn} onClick={toggleLang}>{t.langToggle}</button>
+          <button style={styles.navBtn} className="navBtn" onClick={onStart}>
+            {session ? t.navContinue(session.username) : t.navSignIn}
           </button>
         </nav>
       </header>
 
-      <section style={styles.hero} className="hero-grid">
+      <section style={{ ...styles.hero, position: "relative" }} className="hero-grid">
         <div style={styles.heroInner}>
           <p style={styles.eyebrow} className="rise" >
-            Field Support · Internal Tool
+            {t.eyebrow}
           </p>
           <h1 style={styles.h1}>
-            <span className="rise d1">Answers from every</span>
+            <span className="rise d1">{t.heroLine1}</span>
             <br />
-            <span className="rise d2">resolved support case,</span>
+            <span className="rise d2">{t.heroLine2}</span>
             <br />
             <span className="rise d3" style={{ color: C.red }}>
-              in seconds.
+              {t.heroLine3}
             </span>
           </h1>
-          <div className="rise d4" style={{ margin: "22px 0 0" }}>
+          <div className="rise d4 arcAccent" style={{ margin: "22px 0 0", display: "inline-block" }}>
             <Arc width={150} />
           </div>
           <p style={styles.sub} className="rise d5">
-            SupportBot searches Elsewedy's device knowledge base by meaning, not
-            just keywords — surfacing the closest past cases, their causes, and
-            the fixes that worked.
+            {t.heroSub}
           </p>
           <div style={styles.heroCtas} className="rise d6">
-            <button style={styles.primaryBtn} onClick={onStart}>
-              Get started
+            <button style={styles.primaryBtn} className="primaryBtn" onClick={onStart}>
+              {session ? t.openApp : t.getStarted}
             </button>
-            <a style={styles.ghostBtn} href="#how">
-              See how it works
+            <a style={styles.ghostBtn} className="ghostBtn" href="#how">
+              {t.seeHow}
             </a>
           </div>
         </div>
 
         <div style={styles.heroPanel} className="floatIn">
-          <MockChatPreview />
+          <div className="floatLoop">
+            <MockChatPreview />
+          </div>
         </div>
       </section>
 
       <section id="how" style={styles.how}>
-        <div style={styles.howHead}>
-          <h2 style={styles.h2}>How it works</h2>
-          <Arc width={110} />
-        </div>
+        <Reveal>
+          <div style={styles.howHead}>
+            <h2 style={styles.h2}>{t.howTitle}</h2>
+            <Arc width={110} />
+          </div>
+        </Reveal>
         <div style={styles.steps}>
           {[
-            ["Ask in plain words", "Describe the symptom the way an engineer would in the field. No error-code lookup tables needed."],
-            ["Search by meaning", "Every past case is embedded as a vector. SupportBot finds the closest matches — even with zero shared keywords."],
-            ["Get the fix", "See the matched case, its root cause, and the resolution that actually worked, ranked by closeness."],
-          ].map(([t, d], i) => (
-            <div key={i} style={styles.step}>
-              <div style={styles.stepNum}>{String(i + 1).padStart(2, "0")}</div>
-              <h3 style={styles.stepTitle}>{t}</h3>
-              <p style={styles.stepText}>{d}</p>
-            </div>
+            [t.step1Title, t.step1Text],
+            [t.step2Title, t.step2Text],
+            [t.step3Title, t.step3Text],
+          ].map(([title, desc], i) => (
+            <Reveal key={i} delay={i * 0.12}>
+              <div style={styles.step} className="stepCard">
+                <div style={styles.stepNum}>{String(i + 1).padStart(2, "0")}</div>
+                <h3 style={styles.stepTitle}>{title}</h3>
+                <p style={styles.stepText}>{desc}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
       <section id="cases" style={styles.coverage}>
-        <div style={styles.howHead}>
-          <h2 style={styles.h2}>What it covers</h2>
-          <Arc width={110} />
-        </div>
+        <Reveal>
+          <div style={styles.howHead}>
+            <h2 style={styles.h2}>{t.coverageTitle}</h2>
+            <Arc width={110} />
+          </div>
+        </Reveal>
         <div style={styles.chips}>
-          {["AeroSense G3", "ThermoNode T5", "PowerTrack P1", "GridLink Hub", "FlowMeter X100", "FlowMeter X200"].map(
-            (p) => (
-              <span key={p} style={styles.chip}>
-                {p}
-              </span>
+          {["AeroSense G2", "AeroSense G3", "ThermoNode T5", "PowerTrack P1", "GridLink Hub", "FlowMeter X100", "FlowMeter X200"].map(
+            (p, i) => (
+              <Reveal key={p} delay={i * 0.06} style={{ display: "inline-block" }}>
+                <span style={styles.chip} className="chipHover" dir="ltr">
+                  {p}
+                </span>
+              </Reveal>
             )
           )}
         </div>
-        <p style={styles.coverageNote}>
-          Connectivity · Configuration · Display · Power · Installation ·
-          Firmware · Mechanical · Measurement
-        </p>
+        <Reveal delay={0.3}>
+          <p style={styles.coverageNote}>
+            {t.coverageNote}
+          </p>
+        </Reveal>
       </section>
 
       <footer style={styles.footer}>
         <Logo height={24} />
         <span style={styles.footNote}>
-          Internal support tool · Demo build
+          {t.footerNote}
         </span>
       </footer>
     </div>
   );
 }
 
+// Rotating example conversations for the landing-page preview widget.
+// Distances shown match what the real system actually returns for these
+// exact queries (verified during Day 2) — this preview isn't hooked up to
+// the live backend, but the numbers aren't made up either.
+const PREVIEW_CONVOS = [
+  {
+    q: "Readings drift higher after install",
+    dist: "0.374",
+    hits: [
+      { product: "AeroSense G3", category: "Connectivity", cause: "Sensor contaminated by dust ingress", fix: "Cleaned sensor chamber, replaced intake filter" },
+      { product: "ThermoNode T5", category: "Installation", cause: "Thermal offset not calibrated" },
+    ],
+  },
+  {
+    q: "Unit fails the compliance self-check",
+    dist: "0.398",
+    hits: [
+      { product: "PowerTrack P1", category: "Configuration", cause: "Configuration below the regional threshold", fix: "Applied the Policy 7 configuration profile" },
+    ],
+  },
+  {
+    q: "Screen shows nothing after power on",
+    dist: "0.421",
+    hits: [
+      { product: "ThermoNode T5", category: "Display", cause: "Backlight fuse blown", fix: "Replaced the backlight fuse" },
+    ],
+  },
+  {
+    q: "Device reboots randomly",
+    dist: "0.487",
+    hits: [
+      { product: "GridLink Hub", category: "Mechanical", cause: "Vibration loosening the terminal block", fix: "Re-torqued terminals, added thread-lock" },
+    ],
+  },
+];
+
 function MockChatPreview() {
-  const [step, setStep] = useState(0);
+  const [convoIdx, setConvoIdx] = useState(0);
+  const [step, setStep] = useState(0); // 0=question only, 1=typing, 2..=hits revealed, last=meta
+  const [phase, setPhase] = useState("entering"); // entering -> idle -> exiting
+  const contentRef = useRef(null);
+  const [boxHeight, setBoxHeight] = useState(null);
+  const cardRef = useRef(null);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+
+  const convo = PREVIEW_CONVOS[convoIdx];
+
+  // Subtle mouse-tilt parallax — the card leans gently toward the cursor.
+  // Mouse-only by nature (no mousemove on touch), so it degrades gracefully.
+  const handleTiltMove = (e) => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const el = cardRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width - 0.5;
+    const py = (e.clientY - rect.top) / rect.height - 0.5;
+    setTilt({ x: py * -7, y: px * 9 });
+  };
+  const handleTiltLeave = () => setTilt({ x: 0, y: 0 });
+
+  // Measure the actual content height every time what's rendered changes,
+  // and animate the WRAPPER to that height. This is what makes the box
+  // itself glide to its new size instead of snapping — CSS can't transition
+  // "height: auto", so we measure the real pixel height with a ref and
+  // transition to that explicit number instead.
+  useLayoutEffect(() => {
+    if (contentRef.current) {
+      setBoxHeight(contentRef.current.scrollHeight);
+    }
+  }, [step, convoIdx]);
+
   useEffect(() => {
-    const t = setInterval(() => setStep((s) => (s + 1) % 4), 1600);
-    return () => clearInterval(t);
-  }, []);
+    setStep(0);
+    setPhase("entering");
+    let cancelled = false;
+    const timers = [];
+    const after = (fn, delay) => {
+      const t = setTimeout(() => !cancelled && fn(), delay);
+      timers.push(t);
+    };
+
+    // Force the browser to paint the "entering" (offset + transparent) state
+    // on its own frame BEFORE switching to "idle" — otherwise the opacity/
+    // transform change happens in the same paint and there's nothing to
+    // transition between.
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(() => !cancelled && setPhase("idle"));
+      timers.push({ cancel: () => cancelAnimationFrame(raf2) });
+    });
+
+    let t = 550;
+    after(() => setStep(1), t); // show typing dots
+    convo.hits.forEach((_, i) => {
+      t += 950;
+      after(() => setStep(2 + i), t); // reveal each hit in turn
+    });
+    t += 950;
+    after(() => setStep(2 + convo.hits.length), t); // show meta line
+    t += 2200; // hold the finished conversation on screen
+    after(() => setPhase("exiting"), t);
+    t += 650; // must be >= the content fade duration, or we cut it short
+    after(() => setConvoIdx((c) => (c + 1) % PREVIEW_CONVOS.length), t);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf1);
+      timers.forEach((t) => (typeof t === "number" ? clearTimeout(t) : t.cancel()));
+    };
+  }, [convoIdx]);
+
+  const contentStyle = {
+    ...styles.previewBody,
+    opacity: phase === "idle" ? 1 : 0,
+    transform:
+      phase === "exiting" ? "translateY(-14px)" : phase === "entering" ? "translateY(14px)" : "translateY(0)",
+    transition: "opacity .6s ease, transform .6s ease",
+  };
+
   return (
-    <div style={styles.preview}>
+    <div
+      ref={cardRef}
+      style={{
+        ...styles.preview,
+        transform: `perspective(900px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+        transition: "transform .25s ease-out",
+      }}
+      onMouseMove={handleTiltMove}
+      onMouseLeave={handleTiltLeave}
+    >
       <div style={styles.previewBar}>
         <span style={{ ...styles.dot, background: "#FF5F56" }} />
         <span style={{ ...styles.dot, background: "#FFBD2E" }} />
         <span style={{ ...styles.dot, background: "#27C93F" }} />
         <span style={styles.previewTitle}>SupportBot</span>
       </div>
-      <div style={styles.previewBody}>
-        <div style={styles.bubbleUser}>Readings drift higher after install</div>
-        {step >= 1 && (
-          <div style={styles.bubbleBot} className="pop">
-            <strong>AeroSense G3 · Connectivity</strong>
-            <div style={styles.previewMatch}>
-              Sensor contaminated by dust ingress
+      <div
+        style={{
+          overflow: "hidden",
+          transition: "height .45s cubic-bezier(.16,1,.3,1)",
+          height: boxHeight != null ? `${boxHeight}px` : "auto",
+        }}
+      >
+        <div ref={contentRef} style={contentStyle}>
+          <div key={`q-${convoIdx}`} style={styles.bubbleUser}>
+            {convo.q}
+          </div>
+
+          {step === 1 && (
+            <div style={{ ...styles.bubbleBot, display: "flex", gap: 5, alignItems: "center" }} className="pop">
+              <span style={styles.tdot} className="td1" />
+              <span style={styles.tdot} className="td2" />
+              <span style={styles.tdot} className="td3" />
             </div>
-            <div style={styles.previewFix}>
-              → Cleaned sensor chamber, replaced intake filter
+          )}
+
+          {convo.hits.map(
+            (h, i) =>
+              step >= 2 + i && (
+                <div key={`hit-${convoIdx}-${i}`} style={{ ...styles.bubbleBot, opacity: i === 0 ? 1 : 0.85 }} className="pop">
+                  <strong>
+                    {h.product} · {h.category}
+                  </strong>
+                  <div style={styles.previewMatch}>{h.cause}</div>
+                  {h.fix && <div style={styles.previewFix}>→ {h.fix}</div>}
+                </div>
+              )
+          )}
+
+          {step >= 2 + convo.hits.length && (
+            <div key={`meta-${convoIdx}`} style={styles.previewMeta} className="pop">
+              matched in 0.3s · cosine {convo.dist}
             </div>
-          </div>
-        )}
-        {step >= 2 && (
-          <div style={{ ...styles.bubbleBot, opacity: 0.85 }} className="pop">
-            <strong>ThermoNode T5 · Installation</strong>
-            <div style={styles.previewMatch}>Thermal offset not calibrated</div>
-          </div>
-        )}
-        {step >= 3 && (
-          <div style={styles.previewMeta} className="pop">
-            matched in 0.3s · cosine 0.37
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -276,15 +671,15 @@ function MockChatPreview() {
 // ===========================================================================
 function Auth({ onAuthed, onHome }) {
   const [mode, setMode] = useState("login"); // login | signup | forgot
+  const { t } = useLang();
   return (
     <div style={styles.authWrap} className="auth-grid">
       <div style={styles.authArt} className="authArt auth-art-hide">
         <div style={{ position: "relative", zIndex: 2 }}>
           <Logo height={40} mono animateArc />
-          <h2 style={styles.authArtTitle}>SupportBot</h2>
+          <h2 style={styles.authArtTitle}>{t.chatTitle}</h2>
           <p style={styles.authArtText}>
-            Faster field resolutions, grounded in every case your team has
-            already solved.
+            {t.authArtTagline}
           </p>
         </div>
         <div className="arcField" aria-hidden="true" />
@@ -292,12 +687,14 @@ function Auth({ onAuthed, onHome }) {
 
       <div style={styles.authPanel}>
         <button style={styles.backLink} onClick={onHome}>
-          ← Back
+          {t.backHome}
         </button>
         <div style={styles.authCard}>
-          {mode === "login" && <Login onAuthed={onAuthed} switchTo={setMode} />}
-          {mode === "signup" && <Signup onAuthed={onAuthed} switchTo={setMode} />}
-          {mode === "forgot" && <Forgot switchTo={setMode} />}
+          <div key={mode} className="pageIn">
+            {mode === "login" && <Login onAuthed={onAuthed} switchTo={setMode} />}
+            {mode === "signup" && <Signup onAuthed={onAuthed} switchTo={setMode} />}
+            {mode === "forgot" && <Forgot switchTo={setMode} />}
+          </div>
         </div>
       </div>
     </div>
@@ -316,7 +713,14 @@ function Field({ label, ...props }) {
 function Notice({ kind = "info", children }) {
   const bg = kind === "error" ? "#FDECEC" : kind === "ok" ? "#EAF7EF" : "#F1F0EC";
   const fg = kind === "error" ? C.redDark : kind === "ok" ? C.ok : C.ink;
-  return <div style={{ ...styles.notice, background: bg, color: fg }}>{children}</div>;
+  return (
+    <div
+      style={{ ...styles.notice, background: bg, color: fg }}
+      className={kind === "error" ? "noticeShake" : "pop"}
+    >
+      {children}
+    </div>
+  );
 }
 
 function Login({ onAuthed, switchTo }) {
@@ -324,10 +728,11 @@ function Login({ onAuthed, switchTo }) {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const { t } = useLang();
 
   const submit = async () => {
     setErr("");
-    if (!emailOk(email)) return setErr("Enter a valid email address.");
+    if (!emailOk(email)) return setErr(t.errInvalidEmail);
     setBusy(true);
     try {
       const r = await api("/auth/login", { email, password });
@@ -341,35 +746,36 @@ function Login({ onAuthed, switchTo }) {
 
   return (
     <>
-      <h3 style={styles.cardTitle}>Sign in</h3>
-      <p style={styles.cardSub}>Welcome back. Pick up where you left off.</p>
+      <h3 style={styles.cardTitle}>{t.signInTitle}</h3>
+      <p style={styles.cardSub}>{t.signInSub}</p>
       {err && <Notice kind="error">{err}</Notice>}
       <Field
-        label="Email"
+        label={t.email}
         type="email"
         placeholder="you@elsewedy.com"
+        dir="ltr"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
       <Field
-        label="Password"
+        label={t.password}
         type="password"
         placeholder="••••••••"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && submit()}
       />
-      <button style={styles.authBtn} onClick={submit} disabled={busy}>
-        {busy ? "Signing in…" : "Sign in"}
+      <button style={styles.authBtn} className="authBtnAnim" onClick={submit} disabled={busy}>
+        {busy ? t.signingIn : t.signInBtn}
       </button>
       <div style={styles.authLinks}>
         <button style={styles.linkBtn} onClick={() => switchTo("forgot")}>
-          Forgot password?
+          {t.forgotLink}
         </button>
         <span style={{ color: C.mute }}>
-          New here?{" "}
+          {t.newHere}{" "}
           <button style={styles.linkBtn} onClick={() => switchTo("signup")}>
-            Create account
+            {t.createAccount}
           </button>
         </span>
       </div>
@@ -378,37 +784,21 @@ function Login({ onAuthed, switchTo }) {
 }
 
 function Signup({ onAuthed, switchTo }) {
-  const [stage, setStage] = useState("form"); // form | verify
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [entered, setEntered] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [emailMode, setEmailMode] = useState("console");
+  const { t } = useLang();
 
-  const startVerify = async () => {
+  const submit = async () => {
     setErr("");
-    if (username.trim().length < 2) return setErr("Pick a username (2+ characters).");
-    if (!emailOk(email)) return setErr("Enter a valid email address.");
-    if (password.length < 6) return setErr("Password must be at least 6 characters.");
+    if (username.trim().length < 2) return setErr(t.errUsernameShort);
+    if (!emailOk(email)) return setErr(t.errInvalidEmail);
+    if (password.length < 6) return setErr(t.errPasswordShort);
     setBusy(true);
     try {
       const r = await api("/auth/signup", { username, email, password });
-      setEmailMode(r.email_mode || "console");
-      setStage("verify");
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const finish = async () => {
-    setErr("");
-    setBusy(true);
-    try {
-      const r = await api("/auth/verify", { email, code: entered });
       onAuthed({ username: r.username, email: r.email, token: r.token });
     } catch (e) {
       setErr(e.message);
@@ -417,77 +807,42 @@ function Signup({ onAuthed, switchTo }) {
     }
   };
 
-  if (stage === "verify") {
-    return (
-      <>
-        <h3 style={styles.cardTitle}>Verify your email</h3>
-        <p style={styles.cardSub}>
-          We sent a 6-digit code to <strong>{email}</strong>.
-        </p>
-        {emailMode === "console" ? (
-          <Notice kind="info">
-            Server is in console mode — no real email sent. Check the terminal
-            running the backend for your code.
-          </Notice>
-        ) : (
-          <Notice kind="ok">Code sent — check your inbox (and spam).</Notice>
-        )}
-        {err && <Notice kind="error">{err}</Notice>}
-        <Field
-          label="6-digit code"
-          inputMode="numeric"
-          maxLength={6}
-          placeholder="••••••"
-          value={entered}
-          onChange={(e) => setEntered(e.target.value.replace(/\D/g, ""))}
-          onKeyDown={(e) => e.key === "Enter" && finish()}
-        />
-        <button style={styles.authBtn} onClick={finish} disabled={busy}>
-          {busy ? "Verifying…" : "Verify & create account"}
-        </button>
-        <div style={styles.authLinks}>
-          <button style={styles.linkBtn} onClick={() => setStage("form")}>
-            ← Edit details
-          </button>
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
-      <h3 style={styles.cardTitle}>Create account</h3>
-      <p style={styles.cardSub}>One minute, and SupportBot is yours.</p>
+      <h3 style={styles.cardTitle}>{t.createTitle}</h3>
+      <p style={styles.cardSub}>{t.createSub}</p>
       {err && <Notice kind="error">{err}</Notice>}
       <Field
-        label="Username"
+        label={t.username}
         placeholder="e.g. y.bassem"
+        dir="ltr"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
       />
       <Field
-        label="Email"
+        label={t.email}
         type="email"
         placeholder="you@elsewedy.com"
+        dir="ltr"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
       <Field
-        label="Password"
+        label={t.password}
         type="password"
-        placeholder="At least 6 characters"
+        placeholder={t.atLeast6}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && startVerify()}
+        onKeyDown={(e) => e.key === "Enter" && submit()}
       />
-      <button style={styles.authBtn} onClick={startVerify} disabled={busy}>
-        {busy ? "Sending code…" : "Continue"}
+      <button style={styles.authBtn} className="authBtnAnim" onClick={submit} disabled={busy}>
+        {busy ? t.creatingAccount : t.createAccount}
       </button>
       <div style={styles.authLinks}>
         <span style={{ color: C.mute }}>
-          Already have an account?{" "}
+          {t.alreadyHave}{" "}
           <button style={styles.linkBtn} onClick={() => switchTo("login")}>
-            Sign in
+            {t.signInBtn}
           </button>
         </span>
       </div>
@@ -503,10 +858,11 @@ function Forgot({ switchTo }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [emailMode, setEmailMode] = useState("console");
+  const { t } = useLang();
 
   const send = async () => {
     setErr("");
-    if (!emailOk(email)) return setErr("Enter a valid email address.");
+    if (!emailOk(email)) return setErr(t.errInvalidEmail);
     setBusy(true);
     try {
       const r = await api("/auth/forgot", { email });
@@ -521,7 +877,7 @@ function Forgot({ switchTo }) {
 
   const reset = async () => {
     setErr("");
-    if (pw.length < 6) return setErr("New password must be at least 6 characters.");
+    if (pw.length < 6) return setErr(t.errPasswordShort);
     setBusy(true);
     try {
       await api("/auth/reset", { email, code: entered, new_password: pw });
@@ -536,11 +892,11 @@ function Forgot({ switchTo }) {
   if (stage === "done") {
     return (
       <>
-        <h3 style={styles.cardTitle}>Password updated</h3>
-        <p style={styles.cardSub}>You can sign in with your new password now.</p>
-        <Notice kind="ok">All set — your password has been changed.</Notice>
-        <button style={styles.authBtn} onClick={() => switchTo("login")}>
-          Back to sign in
+        <h3 style={styles.cardTitle}>{t.doneTitle}</h3>
+        <p style={styles.cardSub}>{t.doneSub}</p>
+        <Notice kind="ok">{t.doneNotice}</Notice>
+        <button style={styles.authBtn} className="authBtnAnim" onClick={() => switchTo("login")}>
+          {t.backToSignInBtn}
         </button>
       </>
     );
@@ -549,38 +905,35 @@ function Forgot({ switchTo }) {
   if (stage === "reset") {
     return (
       <>
-        <h3 style={styles.cardTitle}>Reset password</h3>
+        <h3 style={styles.cardTitle}>{t.resetTitle}</h3>
         <p style={styles.cardSub}>
-          Enter the code sent to <strong>{email}</strong> and choose a new
-          password.
+          {t.resetCodeSentPre} <strong dir="ltr">{email}</strong> {t.resetCodeSentPost}
         </p>
         {emailMode === "console" ? (
-          <Notice kind="info">
-            Server is in console mode — no real email sent. Check the terminal
-            running the backend for your code.
-          </Notice>
+          <Notice kind="info">{t.consoleModeNotice}</Notice>
         ) : (
-          <Notice kind="ok">Code sent — check your inbox (and spam).</Notice>
+          <Notice kind="ok">{t.codeSentNotice}</Notice>
         )}
         {err && <Notice kind="error">{err}</Notice>}
         <Field
-          label="6-digit code"
+          label={t.resetCodeLabel}
           inputMode="numeric"
           maxLength={6}
           placeholder="••••••"
+          dir="ltr"
           value={entered}
           onChange={(e) => setEntered(e.target.value.replace(/\D/g, ""))}
         />
         <Field
-          label="New password"
+          label={t.newPassword}
           type="password"
-          placeholder="At least 6 characters"
+          placeholder={t.atLeast6}
           value={pw}
           onChange={(e) => setPw(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && reset()}
         />
-        <button style={styles.authBtn} onClick={reset} disabled={busy}>
-          {busy ? "Updating…" : "Update password"}
+        <button style={styles.authBtn} className="authBtnAnim" onClick={reset} disabled={busy}>
+          {busy ? t.updating : t.updatePassword}
         </button>
       </>
     );
@@ -588,25 +941,26 @@ function Forgot({ switchTo }) {
 
   return (
     <>
-      <h3 style={styles.cardTitle}>Forgot password</h3>
+      <h3 style={styles.cardTitle}>{t.forgotTitle}</h3>
       <p style={styles.cardSub}>
-        Enter your email and we'll send a reset code.
+        {t.forgotSub}
       </p>
       {err && <Notice kind="error">{err}</Notice>}
       <Field
-        label="Email"
+        label={t.email}
         type="email"
         placeholder="you@elsewedy.com"
+        dir="ltr"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && send()}
       />
-      <button style={styles.authBtn} onClick={send} disabled={busy}>
-        {busy ? "Sending…" : "Send reset code"}
+      <button style={styles.authBtn} className="authBtnAnim" onClick={send} disabled={busy}>
+        {busy ? t.sendingCode : t.sendCode}
       </button>
       <div style={styles.authLinks}>
         <button style={styles.linkBtn} onClick={() => switchTo("login")}>
-          ← Back to sign in
+          {t.backToSignIn}
         </button>
       </div>
     </>
@@ -616,12 +970,13 @@ function Forgot({ switchTo }) {
 // ===========================================================================
 // Chat app
 // ===========================================================================
-function Chat({ session, onSignOut }) {
+function Chat({ session, onHome, onSignOut }) {
+  const { t, toggleLang } = useLang();
   const [messages, setMessages] = useState([
     {
       who: "bot",
       kind: "text",
-      text: `Hi ${session?.username || "there"} — describe a device issue and I'll find the closest resolved cases.`,
+      text: t.welcome(session?.username),
     },
   ]);
   const [input, setInput] = useState("");
@@ -635,24 +990,19 @@ function Chat({ session, onSignOut }) {
   const send = async () => {
     const q = input.trim();
     if (!q || busy) return;
+    // Greet only on the very first question: true iff no user message has been
+    // sent yet this chat. The opening bubble is the bot's own, so it doesn't count.
+    const isFirst = !messages.some((m) => m.who === "user");
     setMessages((m) => [...m, { who: "user", kind: "text", text: q }]);
     setInput("");
     setBusy(true);
     try {
-      const hits = await api("/search", { query: q });
+      const r = await api("/chat", { query: q, first: isFirst });
       setBusy(false);
-      if (!hits || hits.length === 0) {
-        setMessages((m) => [
-          ...m,
-          {
-            who: "bot",
-            kind: "empty",
-            text: "No close matches in the case base. This corpus is device support — try describing a hardware symptom (readings, display, reboot, connectivity).",
-          },
-        ]);
-      } else {
-        setMessages((m) => [...m, { who: "bot", kind: "hits", hits }]);
-      }
+      setMessages((m) => [
+        ...m,
+        { who: "bot", kind: "answer", text: r.reply, hits: r.hits, grounded: r.grounded, query: q },
+      ]);
     } catch (e) {
       setBusy(false);
       setMessages((m) => [
@@ -660,15 +1010,19 @@ function Chat({ session, onSignOut }) {
         {
           who: "bot",
           kind: "empty",
-          text: `Couldn't reach the search service: ${e.message}. Is the backend running at ${API_BASE}?`,
+          text: `Couldn't reach the chat service: ${e.message}. Is the backend running at ${API_BASE}?`,
         },
       ]);
     }
   };
 
+  // Example queries stay in English on purpose — the real search backend
+  // (MiniLM + your corpus) is English-only, so these need to keep working
+  // when clicked, not just look translated. Each of these is backed by a
+  // real, resolved case in the corpus — verified against support_cases.csv.
   const suggestions = [
     "Readings drift higher after install",
-    "Config resets after power cycle",
+    "Unit fails the compliance self-check",
     "Screen shows nothing after power on",
     "Device reboots randomly",
   ];
@@ -676,15 +1030,25 @@ function Chat({ session, onSignOut }) {
   return (
     <div style={styles.chatShell}>
       <aside style={styles.sidebar} className="sidebar-hide">
-        <div style={{ padding: "20px 18px" }}>
-          <Logo height={26} />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 18px 0" }}>
+          <button
+            onClick={onHome}
+            className="logoWiggle"
+            title="Back to home"
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+          >
+            <Logo height={38} />
+          </button>
+          <button style={styles.langBtnSmall} onClick={toggleLang}>{t.langToggle}</button>
         </div>
         <div style={styles.sideSection}>
-          <div style={styles.sideLabel}>Try asking</div>
-          {suggestions.map((s) => (
+          <div style={styles.sideLabel}>{t.tryAsking}</div>
+          {suggestions.map((s, i) => (
             <button
               key={s}
-              style={styles.suggest}
+              style={{ ...styles.suggest, animationDelay: `${0.15 + i * 0.08}s` }}
+              className="suggestBtn rise"
+              dir="ltr"
               onClick={() => setInput(s)}
             >
               {s}
@@ -693,55 +1057,143 @@ function Chat({ session, onSignOut }) {
         </div>
         <div style={{ marginTop: "auto", padding: 18, borderTop: `1px solid ${C.line}` }}>
           <div style={styles.userRow}>
-            <div style={styles.avatar}>
+            <div style={styles.avatar} className="avatarHover">
               {(session?.username || "U").slice(0, 1).toUpperCase()}
             </div>
             <div style={{ overflow: "hidden" }}>
               <div style={styles.userName}>{session?.username}</div>
-              <div style={styles.userMail}>{session?.email}</div>
+              <div style={styles.userMail} dir="ltr">{session?.email}</div>
             </div>
           </div>
-          <button style={styles.signOut} onClick={onSignOut}>
-            Sign out
+          <button style={styles.signOut} className="signOutBtn" onClick={onSignOut}>
+            {t.signOut}
           </button>
         </div>
       </aside>
 
       <main style={styles.chatMain}>
         <header style={styles.chatHead}>
-          <div>
-            <div style={styles.chatTitle}>SupportBot</div>
-            <div style={styles.chatSubtitle}>
-              Semantic search over resolved device cases
+          <div style={styles.chatHeadInner}>
+            <div>
+              <div style={styles.chatTitle}>{t.chatTitle}</div>
+              <div style={styles.chatSubtitle}>
+                {t.chatSubtitle(CASE_COUNT)}
+              </div>
+            </div>
+            <div style={styles.livePill}>
+              <span style={styles.liveDot} className="livePulse" />
+              {t.live}
             </div>
           </div>
-          <Arc width={90} />
         </header>
 
-        <div ref={scroller} style={styles.stream}>
-          {messages.map((m, i) => (
-            <Message key={i} m={m} />
-          ))}
-          {busy && <Typing />}
+        <div ref={scroller} style={styles.stream} className="themedScroll">
+          <div style={styles.streamInner}>
+            {messages.map((m, i) => (
+              <Message key={i} m={m} />
+            ))}
+            {busy && <Typing />}
+          </div>
         </div>
 
         <div style={styles.composer}>
-          <input
-            style={styles.composerInput}
-            placeholder="Describe the issue…"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-          />
-          <button
-            style={{ ...styles.sendBtn, opacity: input.trim() && !busy ? 1 : 0.5 }}
-            onClick={send}
-            aria-label="Send"
-          >
-            <SendArc />
-          </button>
+          <div style={styles.composerInner}>
+            <input
+              style={styles.composerInput}
+              placeholder={t.composerPlaceholder}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+            />
+            <button
+              style={{ ...styles.sendBtn, opacity: input.trim() && !busy ? 1 : 0.5 }}
+              onClick={send}
+              aria-label="Send"
+              className="sendBtn"
+            >
+              <SendArc />
+            </button>
+          </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+// A line that opens with a short label, e.g. "Problem: readings drift".
+// The label is matched rather than hardcoded to Problem/Resolution so an
+// Arabic reply, whose labels come back translated, styles identically. The
+// length cap keeps ordinary prose that merely contains a colon ("Couldn't
+// reach the service: ...") from being mistaken for a label.
+const LABEL_LINE = /^([^\s:][^:\n]{0,24}):\s*(.*)$/;
+
+// The reply arrives as plain text laid out in "Problem:" / "Resolution:"
+// lines separated by blank lines. HTML collapses newlines, so that layout has
+// to be rebuilt as real elements or the whole answer renders as one run-on
+// paragraph -- which is what it did before.
+function FormattedReply({ text }) {
+  const blocks = String(text ?? "").trim().split(/\n\s*\n+/);
+
+  return blocks.map((block, blockIndex) => (
+    <div key={blockIndex} style={blockIndex > 0 ? styles.replyBlock : undefined}>
+      {block.split("\n").map((line, lineIndex) => {
+        const labelled = line.match(LABEL_LINE);
+        return (
+          <div key={lineIndex}>
+            {labelled ? (
+              <>
+                <strong>{labelled[1]}:</strong> {labelled[2]}
+              </>
+            ) : (
+              line
+            )}
+          </div>
+        );
+      })}
+    </div>
+  ));
+}
+
+// Thumbs up/down on a grounded answer -> POST /feedback. Anonymous; fire and
+// forget (a failed vote must never disrupt the chat). Closes the quality loop.
+function AnswerFeedback({ query, caseId }) {
+  const [voted, setVoted] = useState(null); // "up" | "down" | null
+  const { lang } = useLang();
+  const txt =
+    lang === "ar"
+      ? { prompt: "هل كان هذا مفيدًا؟", thanks: "شكرًا على ملاحظتك!" }
+      : { prompt: "Was this helpful?", thanks: "Thanks for your feedback!" };
+
+  const send = async (vote) => {
+    if (voted) return;
+    setVoted(vote);
+    try {
+      await api("/feedback", { query, vote, case_id: caseId || null });
+    } catch {
+      /* a lost vote is not worth surfacing to the user */
+    }
+  };
+
+  const btn = {
+    background: "none",
+    border: `1px solid ${C.line}`,
+    borderRadius: 8,
+    cursor: "pointer",
+    fontSize: 15,
+    lineHeight: 1,
+    padding: "4px 8px",
+  };
+
+  if (voted) {
+    return (
+      <div style={{ marginTop: 6, fontSize: 12, color: C.mute }}>{txt.thanks}</div>
+    );
+  }
+  return (
+    <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+      <span style={{ fontSize: 12, color: C.mute }}>{txt.prompt}</span>
+      <button style={btn} onClick={() => send("up")} aria-label="Helpful" title="Helpful">👍</button>
+      <button style={btn} onClick={() => send("down")} aria-label="Not helpful" title="Not helpful">👎</button>
     </div>
   );
 }
@@ -750,7 +1202,7 @@ function Message({ m }) {
   if (m.who === "user") {
     return (
       <div style={styles.rowRight}>
-        <div style={styles.userBubble}>{m.text}</div>
+        <div style={styles.userBubble} className="userBubbleIn">{m.text}</div>
       </div>
     );
   }
@@ -758,76 +1210,157 @@ function Message({ m }) {
     return (
       <div style={styles.rowLeft}>
         <div style={styles.botBubble} className="pop">
-          {/* This splits the text at " / " and replaces it with a real newline */}
-          {m.text.split(" / ").join("\n")}
+          <FormattedReply text={m.text} />
         </div>
       </div>
     );
   }
-  // hits — real backend shape: {case_id, product, category, problem, distance, document}
+  // answer — Gemini's grounded reply, plus an optional "see how this was
+  // found" disclosure showing the real embedding-space geometry.
   return (
     <div style={styles.rowLeft}>
-      <div style={{ ...styles.botBubble, padding: 0, background: "transparent", boxShadow: "none" }}>
-        <div style={styles.hitIntro}>Closest resolved cases</div>
-        <div style={styles.hitList}>
-          {m.hits.map((h, idx) => {
-            const parts = parseDocument(h.document);
-            return (
-              <div key={h.case_id} style={styles.hitCard} className="pop">
-                <div style={styles.hitTop}>
-                  <span style={styles.hitRank}>{String(idx + 1).padStart(2, "0")}</span>
-                  <span style={styles.hitProduct}>{h.product}</span>
-                  <span style={styles.hitCat}>{h.category}</span>
-                  <span style={styles.hitDist}>{h.distance.toFixed(3)}</span>
-                  <span style={styles.hitId}>#{h.case_id}</span>
-                </div>
-                <div style={styles.hitProblem}>{h.problem}</div>
-                {(parts.Cause || parts.Resolution) && (
-                  <div style={styles.hitGrid}>
-                    {parts.Cause && (
-                      <>
-                        <span style={styles.hitKey}>Cause</span>
-                        <span style={styles.hitVal}>{parts.Cause}</span>
-                      </>
-                    )}
-                    {parts.Resolution && (
-                      <>
-                        <span style={styles.hitKey}>Fix</span>
-                        <span style={{ ...styles.hitVal, color: C.ink, fontWeight: 600 }}>
-                          {parts.Resolution}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+      <div style={{ maxWidth: 660 }}>
+        <div style={styles.botBubble} className="pop">
+          <FormattedReply text={m.text} />
+          {m.grounded === false && (
+            <div style={styles.fallbackNote}>Answer-writing service unavailable.</div>
+          )}
         </div>
+        {m.hits && m.hits.length > 0 && (
+          <AnswerFeedback query={m.query} caseId={m.hits[0]?.case_id} />
+        )}
+        {m.query && <EmbeddingMapView query={m.query} />}
       </div>
     </div>
   );
 }
 
-// Parse the labelled `document` text ("Product: … / Category: … / Problem: …
-// / Cause: … / Resolution: …") back into fields for display.
-function parseDocument(doc) {
-  const out = {};
-  if (!doc) return out;
-  for (const seg of doc.split(" / ")) {
-    const i = seg.indexOf(": ");
-    if (i > 0) out[seg.slice(0, i).trim()] = seg.slice(i + 2).trim();
-  }
-  return out;
+// The signature feature: shows the REAL embedding-space geometry behind a
+// search — where the query landed relative to every case, and which ones
+// were the actual retrieved matches. Collapsed by default (restraint —
+// this is the one bold element, not something to force on every message).
+function EmbeddingMapView({ query }) {
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState("idle"); // idle | loading | ready | error
+  const [data, setData] = useState(null);
+  const [errMsg, setErrMsg] = useState("");
+  const { t, dir } = useLang();
+
+  const toggle = async () => {
+    if (!open && state === "idle") {
+      setState("loading");
+      try {
+        const r = await api("/embedding_map", { query });
+        setData(r);
+        setState("ready");
+      } catch (e) {
+        setErrMsg(e.message);
+        setState("error");
+      }
+    }
+    setOpen((o) => !o);
+  };
+
+  const arrow = open ? "▾" : dir === "rtl" ? "◂" : "▸";
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button style={styles.mapToggle} onClick={toggle}>
+        {arrow} {t.seeHowFound}
+      </button>
+      {open && (
+        <div style={styles.mapPanel} className="pop">
+          {state === "loading" && (
+            <div style={styles.mapLoading}>
+              <span style={styles.tdot} className="td1" />
+              <span style={styles.tdot} className="td2" />
+              <span style={styles.tdot} className="td3" />
+              <span style={{ marginInlineStart: 8 }}>{t.mapLoading}</span>
+            </div>
+          )}
+          {state === "error" && (
+            <div style={styles.mapLoading}>{t.mapError(errMsg)}</div>
+          )}
+          {state === "ready" && data && <EmbeddingScatter data={data} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Renders the PCA-projected points as an SVG scatter: grey dots for the
+// full corpus, red dots for the actual retrieved matches, a black diamond
+// for the query itself, with thin lines connecting the query to each hit.
+// The SVG geometry itself is never mirrored for RTL (a scatter plot's axes
+// aren't a reading-direction concept) — only the surrounding text is.
+function EmbeddingScatter({ data }) {
+  const { t } = useLang();
+  const { query_point, points } = data;
+  const allX = [query_point.x, ...points.map((p) => p.x)];
+  const allY = [query_point.y, ...points.map((p) => p.y)];
+  const minX = Math.min(...allX), maxX = Math.max(...allX);
+  const minY = Math.min(...allY), maxY = Math.max(...allY);
+  const pad = 24;
+  const W = 460, H = 260;
+
+  const sx = (x) => pad + ((x - minX) / (maxX - minX || 1)) * (W - 2 * pad);
+  const sy = (y) => H - pad - ((y - minY) / (maxY - minY || 1)) * (H - 2 * pad);
+
+  const qx = sx(query_point.x), qy = sy(query_point.y);
+  const hits = points.filter((p) => p.is_hit);
+
+  return (
+    <div dir="ltr">
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
+        {hits.map((h) => (
+          <line
+            key={`line-${h.id}`}
+            x1={qx} y1={qy} x2={sx(h.x)} y2={sy(h.y)}
+            stroke={C.red} strokeWidth="1" strokeOpacity="0.35" strokeDasharray="3 3"
+          />
+        ))}
+        {points.map((p) => (
+          <circle
+            key={p.id}
+            cx={sx(p.x)} cy={sy(p.y)}
+            r={p.is_hit ? 5.5 : 3.5}
+            fill={p.is_hit ? C.red : "#C9C6C0"}
+            opacity={p.is_hit ? 1 : 0.55}
+          >
+            <title>{`${p.product} · ${p.category}`}</title>
+          </circle>
+        ))}
+        <path
+          d={`M${qx - 6} ${qy} L${qx} ${qy - 6} L${qx + 6} ${qy} L${qx} ${qy + 6} Z`}
+          fill={C.ink}
+        >
+          <title>{t.legendQuery}</title>
+        </path>
+      </svg>
+      <div style={styles.mapLegend}>
+        <span><span style={{ ...styles.legendSwatch, background: C.ink, borderRadius: 2, transform: "rotate(45deg)" }} /> {t.legendQuery}</span>
+        <span><span style={{ ...styles.legendSwatch, background: C.red }} /> {t.legendMatch}</span>
+        <span><span style={{ ...styles.legendSwatch, background: "#C9C6C0" }} /> {t.legendOther}</span>
+      </div>
+      <p style={styles.mapCaption}>
+        {t.mapCaption(points.length)}
+      </p>
+    </div>
+  );
 }
 
 function Typing() {
+  const { t } = useLang();
   return (
     <div style={styles.rowLeft}>
-      <div style={{ ...styles.botBubble, display: "flex", gap: 5, alignItems: "center" }}>
-        <span style={styles.tdot} className="td1" />
-        <span style={styles.tdot} className="td2" />
-        <span style={styles.tdot} className="td3" />
+      <div style={styles.searchingBox}>
+        <div style={styles.searchingScan} className="searchScan" />
+        <span style={styles.searchingText}>
+          <span style={styles.tdot} className="td1" />
+          <span style={styles.tdot} className="td2" />
+          <span style={styles.tdot} className="td3" />
+          <span style={{ marginInlineStart: 8 }}>{t.searching}</span>
+        </span>
       </div>
     </div>
   );
@@ -847,13 +1380,19 @@ function SendArc() {
 function GlobalStyle() {
   return (
     <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+
       * { box-sizing: border-box; }
       html, body, #root { margin: 0; height: 100%; }
+      html { scroll-behavior: smooth; }
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         color: ${C.ink};
         background: ${C.paper};
         -webkit-font-smoothing: antialiased;
+      }
+      .langAr {
+        font-family: "Cairo", -apple-system, "Segoe UI", Tahoma, Arial, sans-serif;
       }
       button { font-family: inherit; cursor: pointer; }
       a { text-decoration: none; }
@@ -864,29 +1403,64 @@ function GlobalStyle() {
         to   { opacity: 1; transform: translateY(0) scale(1); }
       }
       @keyframes riseUp {
-        from { opacity: 0; transform: translateY(16px); }
+        from { opacity: 0; transform: translateY(22px); }
         to   { opacity: 1; transform: translateY(0); }
       }
       @keyframes floatIn {
-        from { opacity: 0; transform: translateY(24px) scale(0.98); }
+        from { opacity: 0; transform: translateY(30px) scale(0.96); }
         to   { opacity: 1; transform: translateY(0) scale(1); }
       }
       @keyframes popIn {
-        from { opacity: 0; transform: translateY(8px) scale(0.98); }
+        from { opacity: 0; transform: translateY(14px) scale(0.9); }
         to   { opacity: 1; transform: translateY(0) scale(1); }
       }
-      @keyframes bob { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-5px);} }
+      @keyframes bob { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-8px);} }
+      @keyframes bobSlow { 0%,100% { transform: translateY(0) rotate(0deg);} 50% { transform: translateY(-10px) rotate(0.6deg);} }
       @keyframes arcDrift {
         0% { transform: translate(0,0) rotate(0deg); }
         100% { transform: translate(0,-14px) rotate(3deg); }
       }
-
-      .rise { opacity: 0; animation: riseUp .7s cubic-bezier(.2,.7,.2,1) forwards; }
-      .d1 { animation-delay: .05s } .d2 { animation-delay: .13s }
-      .d3 { animation-delay: .21s } .d4 { animation-delay: .32s }
-      .d5 { animation-delay: .42s } .d6 { animation-delay: .52s }
-      .floatIn { opacity: 0; animation: floatIn .9s cubic-bezier(.2,.7,.2,1) forwards .35s; }
-      .pop { animation: popIn .4s cubic-bezier(.2,.7,.2,1) both; }
+      @keyframes pageIn {
+        from { opacity: 0; transform: translateY(14px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes pulseGlow {
+        0%,100% { box-shadow: 0 8px 20px rgba(227,6,19,.28); }
+        50%     { box-shadow: 0 10px 30px rgba(227,6,19,.48); }
+      }
+      @keyframes shimmerArc {
+        0%,100% { opacity: .55; transform: scaleX(1); }
+        50%     { opacity: 1;   transform: scaleX(1.06); }
+      }
+      @keyframes wiggle {
+        0%,100% { transform: rotate(0deg); }
+        25%     { transform: rotate(-2deg); }
+        75%     { transform: rotate(2deg); }
+      }
+      @keyframes shake {
+        10%, 90% { transform: translateX(-1px); }
+        20%, 80% { transform: translateX(2px); }
+        30%, 50%, 70% { transform: translateX(-4px); }
+        40%, 60% { transform: translateX(4px); }
+      }
+      @keyframes livePulseKf {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(31,157,85,.5); }
+        50%      { box-shadow: 0 0 0 5px rgba(31,157,85,0); }
+      }
+      @keyframes searchScanKf {
+        0%   { left: -40%; }
+        100% { left: 100%; }
+      }
+      .livePulse { animation: livePulseKf 2s ease-in-out infinite; }
+      .searchScan { animation: searchScanKf 1.1s ease-in-out infinite; }
+      .rise { opacity: 0; animation: riseUp .75s cubic-bezier(.16,1,.3,1) forwards; }
+      .d1 { animation-delay: .05s } .d2 { animation-delay: .14s }
+      .d3 { animation-delay: .23s } .d4 { animation-delay: .34s }
+      .d5 { animation-delay: .45s } .d6 { animation-delay: .56s }
+      .floatIn { opacity: 0; animation: floatIn 1s cubic-bezier(.16,1,.3,1) forwards .35s; }
+      .floatLoop { animation: bobSlow 5s ease-in-out infinite; }
+      .pop { animation: popIn .5s cubic-bezier(.34,1.56,.64,1) both; }
+      .pageIn { animation: pageIn .5s cubic-bezier(.16,1,.3,1) both; }
 
       .td1 { animation: bob 1s ease-in-out infinite; }
       .td2 { animation: bob 1s ease-in-out infinite .15s; }
@@ -902,12 +1476,62 @@ function GlobalStyle() {
         animation: arcDrift 9s ease-in-out infinite alternate;
       }
 
+      /* ---- real hover / press interactions (need actual classes) ---- */
+      .primaryBtn { transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease; animation: pulseGlow 3s ease-in-out infinite; }
+      .primaryBtn:hover { transform: translateY(-3px) scale(1.03); }
+      .primaryBtn:active { transform: translateY(-1px) scale(.97); }
+
+      .ghostBtn { transition: transform .15s ease, opacity .15s ease; display: inline-block; }
+      .ghostBtn:hover { transform: translateX(3px); opacity: .7; }
+
+      .navBtn { transition: transform .15s ease, background .15s ease, color .15s ease; }
+      .navBtn:hover { transform: translateY(-2px); background: ${C.ink}; color: #fff; }
+
+      .suggestBtn { transition: transform .18s cubic-bezier(.34,1.56,.64,1), border-color .15s ease, box-shadow .2s ease; }
+      .suggestBtn:hover { transform: translateX(4px) scale(1.02); border-color: ${C.red}; box-shadow: 0 6px 16px rgba(227,6,19,.12); }
+
+      .hitCardHover { transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease; }
+      .hitCardHover:hover { transform: translateY(-3px) scale(1.015); box-shadow: 0 12px 28px rgba(26,26,26,.1); }
+
+      .chipHover { transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease, border-color .15s ease; }
+      .chipHover:hover { transform: translateY(-3px) scale(1.05); border-color: ${C.red}; box-shadow: 0 8px 20px rgba(227,6,19,.22); }
+
+      .stepCard { transition: transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .25s ease; }
+      .stepCard:hover { transform: translateY(-6px); box-shadow: 0 16px 34px rgba(26,26,26,.1); }
+
+      .sendBtn { transition: transform .15s cubic-bezier(.34,1.56,.64,1); }
+      .sendBtn:hover { transform: scale(1.08) rotate(4deg); }
+      .sendBtn:active { transform: scale(.9); }
+
+      .logoWiggle:hover svg { animation: wiggle .4s ease; }
+
+      .arcAccent { animation: shimmerArc 2.4s ease-in-out infinite; transform-origin: center; }
+
+      .noticeShake { animation: shake .5s cubic-bezier(.36,.07,.19,.97) both, popIn .3s ease both; }
+
+      .themedScroll::-webkit-scrollbar { width: 8px; height: 8px; }
+      .themedScroll::-webkit-scrollbar-track { background: transparent; }
+      .themedScroll::-webkit-scrollbar-thumb { background: rgba(227,6,19,.22); border-radius: 999px; }
+      .themedScroll::-webkit-scrollbar-thumb:hover { background: rgba(227,6,19,.4); }
+
+      .avatarHover { transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease; }
+      .avatarHover:hover { transform: scale(1.08); box-shadow: 0 0 0 4px rgba(227,6,19,.15); }
+
+      .authBtnAnim { transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease; }
+      .authBtnAnim:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(227,6,19,.32); }
+      .authBtnAnim:active { transform: translateY(0) scale(.98); }
+
+      .signOutBtn { transition: transform .15s ease, border-color .15s ease; }
+      .signOutBtn:hover { transform: translateY(-2px); border-color: ${C.red}; color: ${C.red}; }
+
+      .userBubbleIn { animation: popIn .35s cubic-bezier(.34,1.56,.64,1) both; }
+
       input:focus { outline: none; border-color: ${C.red} !important; box-shadow: 0 0 0 3px rgba(227,6,19,.12); }
-      button.primary:hover { transform: translateY(-1px); }
 
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation: none !important; transition: none !important; }
-        .rise, .floatIn, .pop { opacity: 1 !important; }
+        .rise, .floatIn, .pop, .pageIn { opacity: 1 !important; }
+        html { scroll-behavior: auto; }
       }
 
       @media (max-width: 900px) {
@@ -938,12 +1562,20 @@ const styles = {
     border: `1.5px solid ${C.ink}`, background: "transparent", color: C.ink,
     padding: "9px 18px", borderRadius: 999, fontSize: 14, fontWeight: 600,
   },
+  langBtn: {
+    border: `1.5px solid ${C.line}`, background: "transparent", color: C.mute,
+    padding: "8px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600,
+  },
+  langBtnSmall: {
+    border: `1.5px solid ${C.line}`, background: "transparent", color: C.mute,
+    padding: "5px 11px", borderRadius: 999, fontSize: 11.5, fontWeight: 700,
+  },
 
   hero: {
     display: "grid", gridTemplateColumns: "1.05fr .95fr", gap: 40,
     alignItems: "center", padding: "40px 0 70px",
   },
-  heroInner: {},
+  heroInner: { position: "relative", zIndex: 1 },
   eyebrow: {
     textTransform: "uppercase", letterSpacing: 3, fontSize: 12, fontWeight: 700,
     color: C.red, margin: "0 0 18px",
@@ -958,7 +1590,7 @@ const styles = {
   },
   ghostBtn: { color: C.ink, fontWeight: 600, fontSize: 15, padding: "14px 8px" },
 
-  heroPanel: { display: "flex", justifyContent: "center" },
+  heroPanel: { display: "flex", justifyContent: "center", position: "relative", zIndex: 1 },
   preview: {
     width: "100%", maxWidth: 380, background: C.paper2, borderRadius: 18,
     border: `1px solid ${C.line}`, boxShadow: "0 24px 60px rgba(26,26,26,.12)",
@@ -970,7 +1602,7 @@ const styles = {
   },
   dot: { width: 10, height: 10, borderRadius: 999, display: "inline-block" },
   previewTitle: { marginLeft: 8, fontSize: 13, fontWeight: 700, color: C.mute },
-  previewBody: { padding: 16, display: "flex", flexDirection: "column", gap: 10, minHeight: 230 },
+  previewBody: { padding: 16, display: "flex", flexDirection: "column", gap: 10 },
   bubbleUser: {
     alignSelf: "flex-end", background: C.ink, color: "#fff", padding: "10px 14px",
     borderRadius: "14px 14px 4px 14px", fontSize: 13.5, maxWidth: "85%",
@@ -1008,7 +1640,7 @@ const styles = {
 
   // Auth
   authWrap: {
-    minHeight: "100vh", display: "grid", gridTemplateColumns: "1fr 1fr",
+    minHeight: "100vh", width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr",
   },
   authArt: {
     background: `linear-gradient(150deg, ${C.ink} 0%, #2a2a2a 100%)`,
@@ -1021,9 +1653,10 @@ const styles = {
   authPanel: {
     display: "flex", flexDirection: "column", justifyContent: "center",
     alignItems: "center", padding: "40px 24px", position: "relative",
+    background: "#FFFFFF",
   },
   backLink: {
-    position: "absolute", top: 24, left: 24, background: "transparent",
+    position: "absolute", top: 24, insetInlineStart: 24, background: "transparent",
     border: "none", color: C.mute, fontSize: 14, fontWeight: 600,
   },
   authCard: { width: "100%", maxWidth: 380 },
@@ -1078,15 +1711,45 @@ const styles = {
     borderRadius: 10, padding: "10px", fontSize: 13.5, fontWeight: 600, color: C.ink,
   },
 
-  chatMain: { flex: 1, display: "flex", flexDirection: "column", minWidth: 0 },
+  chatMain: {
+    flex: 1, display: "flex", flexDirection: "column", minWidth: 0,
+    background: "linear-gradient(180deg, #FAFAF8 0%, #F5F3EF 100%)",
+  },
   chatHead: {
-    display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "18px 28px", borderBottom: `1px solid ${C.line}`, background: "#fff",
+    padding: "0 28px", borderBottom: `1px solid ${C.line}`, background: "#fff",
+  },
+  chatHeadInner: {
+    width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "18px 0", maxWidth: 820, marginLeft: "auto", marginRight: "auto",
   },
   chatTitle: { fontSize: 18, fontWeight: 800, letterSpacing: -0.3 },
   chatSubtitle: { fontSize: 13, color: C.mute, marginTop: 2 },
+  livePill: {
+    display: "flex", alignItems: "center", gap: 7, padding: "6px 13px",
+    borderRadius: 999, border: `1px solid ${C.line}`, background: "#fff",
+    fontSize: 12, fontWeight: 700, color: C.ink, letterSpacing: 0.3,
+  },
+  liveDot: { width: 7, height: 7, borderRadius: 999, background: C.ok, display: "inline-block" },
+  searchingBox: {
+    position: "relative", overflow: "hidden",
+    background: "#fff", border: `1px solid ${C.line}`,
+    padding: "12px 16px", borderRadius: "16px 16px 16px 4px",
+    boxShadow: "0 4px 14px rgba(26,26,26,.05)",
+  },
+  searchingScan: {
+    position: "absolute", top: 0, bottom: 0, width: "40%",
+    background: "linear-gradient(90deg, transparent, rgba(227,6,19,.08), transparent)",
+  },
+  searchingText: {
+    position: "relative", display: "flex", alignItems: "center",
+    fontSize: 14, color: C.mute, fontWeight: 500,
+  },
 
-  stream: { flex: 1, overflowY: "auto", padding: "28px", display: "flex", flexDirection: "column", gap: 18 },
+  stream: { flex: 1, overflowY: "auto", padding: "28px" },
+  streamInner: {
+    width: "100%", maxWidth: 820, marginLeft: "auto", marginRight: "auto",
+    display: "flex", flexDirection: "column", gap: 18,
+  },
   rowLeft: { display: "flex", justifyContent: "flex-start" },
   rowRight: { display: "flex", justifyContent: "flex-end" },
   userBubble: {
@@ -1099,6 +1762,33 @@ const styles = {
     boxShadow: "0 4px 14px rgba(26,26,26,.05)",
   },
 
+  // Gap between consecutive Problem/Resolution cases in one reply.
+  replyBlock: { marginTop: 12 },
+
+  fallbackNote: { fontSize: 12, color: C.mute, marginTop: 8, fontStyle: "italic" },
+
+  mapToggle: {
+    background: "none", border: "none", padding: "4px 2px", fontSize: 12.5,
+    fontWeight: 700, color: C.red, cursor: "pointer",
+  },
+  mapPanel: {
+    marginTop: 8, background: "#fff", border: `1px solid ${C.line}`,
+    borderRadius: 14, padding: "16px 18px", boxShadow: "0 4px 14px rgba(26,26,26,.05)",
+  },
+  mapLoading: {
+    display: "flex", alignItems: "center", fontSize: 13.5, color: C.mute, padding: "20px 0",
+  },
+  mapLegend: {
+    display: "flex", gap: 16, flexWrap: "wrap", marginTop: 10,
+    fontSize: 12, color: C.mute,
+  },
+  legendSwatch: {
+    display: "inline-block", width: 9, height: 9, borderRadius: 999,
+    marginRight: 5, verticalAlign: "middle",
+  },
+  mapCaption: {
+    fontSize: 11.5, color: C.mute, marginTop: 10, lineHeight: 1.5, fontStyle: "italic",
+  },
   hitIntro: { fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.mute, marginBottom: 12 },
   hitList: { display: "flex", flexDirection: "column", gap: 12 },
   hitCard: {
@@ -1126,12 +1816,16 @@ const styles = {
   tdot: { width: 7, height: 7, borderRadius: 999, background: C.mute, display: "inline-block" },
 
   composer: {
-    display: "flex", gap: 12, padding: "16px 28px 22px", borderTop: `1px solid ${C.line}`,
-    background: "#fff", alignItems: "center",
+    padding: "16px 28px 22px", borderTop: `1px solid ${C.line}`, background: "#fff",
+  },
+  composerInner: {
+    width: "100%", display: "flex", gap: 12, alignItems: "center",
+    maxWidth: 820, marginLeft: "auto", marginRight: "auto",
   },
   composerInput: {
     flex: 1, padding: "13px 16px", borderRadius: 999, fontSize: 15,
     border: `1.5px solid ${C.line}`, background: C.paper, color: C.ink,
+    transition: "border-color .2s ease, box-shadow .2s ease",
   },
   sendBtn: {
     width: 46, height: 46, borderRadius: 999, background: C.red, border: "none",
