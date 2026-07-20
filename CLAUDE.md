@@ -95,6 +95,29 @@ whether continued extension or consolidating/presenting what exists is the bette
   now folds in the previous question before searching; self-contained queries are untouched.
 - ~~Mobile: sidebar was `display:none` under 900px~~ — DONE (direction-aware slide-in drawer + hamburger).
 - ~~Session lost on refresh~~ — DONE (session + language persisted to localStorage).
+- ~~Dark mode~~ — DONE. My earlier "palette is spread everywhere" estimate was wrong: there were only
+  41 hex literals and a central `C` token object. `C`'s values are now `var(--c-*)` references, so a theme
+  switch is one attribute flip on `<html>` with no React re-render and no second palette to maintain.
+
+## Dark mode — the non-obvious parts
+
+- **Alpha bases are split in two.** `--c-shadow-rgb` (26,26,26 → 0,0,0) and `--c-tint-rgb` (26,26,26 →
+  255,255,255) must move in *opposite* directions: a shadow deepens on a dark surface while an overlay
+  tint has to lighten to stay visible. Blanket-replacing every `rgba(26,26,26,α)` gets the two hover/wash
+  fills wrong.
+- **`--c-inkSurface` is not `--c-ink`.** The user chat bubble and nav-hover use ink as a *surface* with
+  white text. On dark, ink inverts to near-white — white text on a white bubble. It gets its own token.
+- **`--c-redSurface` is not `--c-red`.** Filled buttons keep true `#E30613` in dark mode; the lifted
+  `#FF4B57` is text/border only, because white on `#FF4B57` is 3.3:1 and button labels are too small to
+  count as large text. `#E30613` holds white at 4.9:1 and still reads 3.8:1 against the dark page.
+- **`@import` must stay the first rule.** `THEME_CSS` is injected *after* the Cairo `@import` in
+  `GlobalStyle`; putting it before silently kills the Arabic font.
+- **`index.html` carries a pre-paint inline script** that sets `data-theme` before React mounts, plus a
+  bootstrap background rule. Without it dark-mode users get a white flash, since the stylesheet lives
+  inside the React tree. It must stay in sync with `initialTheme()` (same key, same JSON encoding).
+- OS preference is honoured only as a *default*; an explicit toggle is stored and wins permanently.
+- Verified: all 20 tokens defined symmetrically in both themes, no undefined/dead tokens, and WCAG AA
+  contrast checked on every key text/surface pair in both palettes.
 
 ## UI polish pass (frontend)
 
@@ -108,8 +131,6 @@ whether continued extension or consolidating/presenting what exists is the bette
 
 - **Admin case-management UI + re-index endpoint** — the biggest remaining feature. Adding/editing cases is
   still done by hand in `support_cases.csv` + `uv run python -m rag.ingest && ... rag.index`.
-- **Dark mode** — deliberately deferred: the palette is spread across inline styles plus many hardcoded
-  colours/gradients, so it needs visual iteration to avoid shipping a half-themed UI.
 - Voice input.
 - Minor Arabic edges: the landing-page mock-chat preview and the (English-only) example-query chips stay
   English by design; in the *offline* fallback the case Problem/Resolution text stays English (the live

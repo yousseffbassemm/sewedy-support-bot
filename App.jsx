@@ -36,16 +36,117 @@ async function api(path, body) {
 // ---------------------------------------------------------------------------
 // Brand tokens
 // ---------------------------------------------------------------------------
+// These resolve to CSS custom properties (see THEME_CSS), not literals, so a
+// theme switch is a single attribute flip on <html> -- no React re-render and
+// no second palette to keep in sync. Inline styles resolve var() natively.
+//
+// Nothing may string-manipulate these values (no `C.red + "20"`); to composite
+// with alpha use the *_RGB triplets below instead.
 const C = {
-  red: "#E30613",
-  redDark: "#B00410",
-  ink: "#1A1A1A",
-  paper: "#FAFAF8",
-  paper2: "#FFFFFF",
-  line: "#E7E4DE",
-  mute: "#6B6B6B",
-  ok: "#1F9D55",
+  red: "var(--c-red)",
+  redDark: "var(--c-redDark)",
+  ink: "var(--c-ink)",
+  paper: "var(--c-paper)",
+  paper2: "var(--c-paper2)",
+  line: "var(--c-line)",
+  mute: "var(--c-mute)",
+  ok: "var(--c-ok)",
 };
+
+// Alpha compositing bases. Kept separate because they must move in *opposite*
+// directions between themes: a shadow goes darker on a dark surface, while a
+// subtle overlay tint has to go lighter to stay visible at all.
+const SHADOW = "var(--c-shadow-rgb)";
+const TINT = "var(--c-tint-rgb)";
+const RED_RGB = "var(--c-red-rgb)";
+
+// Light is the authored default; dark is a deliberate warm-neutral set rather
+// than inverted greys -- the brand red is warm, and true-neutral greys read
+// blue-ish and cold next to it. Brand red is also lifted on dark: #E30613 on a
+// near-black surface fails contrast for text and reads muddy for borders.
+const THEME_CSS = `
+  :root {
+    --c-red: #E30613;
+    --c-redDark: #B00410;
+    --c-ink: #1A1A1A;
+    --c-paper: #FAFAF8;
+    --c-paper2: #FFFFFF;
+    --c-line: #E7E4DE;
+    --c-mute: #6B6B6B;
+    --c-ok: #1F9D55;
+
+    --c-red-rgb: 227,6,19;
+    --c-ok-rgb: 31,157,85;
+    --c-shadow-rgb: 26,26,26;
+    --c-tint-rgb: 26,26,26;
+
+    --c-paperGrad: linear-gradient(180deg, #FAFAF8 0%, #F4F2EE 100%);
+    --c-inkGrad: linear-gradient(150deg, #1A1A1A 0%, #2a2a2a 100%);
+    --c-onRed: #fff;
+    --c-okBg: #EAF7EF;
+    --c-errBg: #FDECEC;
+
+    /* Ink used as a *surface* (user chat bubble, nav hover) rather than as
+       text. This cannot be --c-ink: on dark, ink inverts to near-white and a
+       white bubble with white text disappears. It stays a contrasting,
+       slightly-elevated surface in both themes instead. */
+    --c-inkSurface: #1A1A1A;
+    --c-onInk: #fff;
+    --c-redSurface: #E30613;
+  }
+
+  html[data-theme="dark"] {
+    --c-red: #FF4B57;
+    --c-redDark: #E30613;
+    --c-ink: #ECEAE6;
+    --c-paper: #131211;
+    --c-paper2: #1C1A18;
+    --c-line: #2E2B27;
+    --c-mute: #A29B92;
+    --c-ok: #3ECF7F;
+
+    --c-red-rgb: 255,75,87;
+    --c-ok-rgb: 62,207,127;
+    --c-shadow-rgb: 0,0,0;
+    --c-tint-rgb: 255,255,255;
+
+    --c-paperGrad: linear-gradient(180deg, #131211 0%, #0E0D0C 100%);
+    --c-inkGrad: linear-gradient(150deg, #201E1B 0%, #2C2926 100%);
+    --c-onRed: #fff;
+    --c-okBg: #14301F;
+    --c-errBg: #3A1414;
+
+    --c-inkSurface: #35312B;
+    --c-onInk: #F2F0EC;
+    /* Stays true brand red, NOT the lifted --c-red: white-on-#FF4B57 is
+       only 3.3:1 and button labels are too small to qualify as large
+       text. #E30613 keeps white at 4.9:1 and still reads 3.8:1 against
+       the dark page, so the button remains obvious. */
+    --c-redSurface: #E30613;
+  }
+
+  .themeBtn { transition: border-color .18s ease, color .18s ease, transform .18s ease; }
+  .themeBtn:hover { color: var(--c-red); border-color: var(--c-red); transform: translateY(-2px); }
+  .themeIcon { display: inline-flex; animation: themeIconIn .34s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes themeIconIn {
+    from { opacity: 0; transform: rotate(-70deg) scale(.55); }
+    to   { opacity: 1; transform: rotate(0) scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .themeIcon { animation: none; }
+  }
+
+  /* Full-bleed background swap must not look like a flash of the old theme. */
+  html { transition: background-color .28s ease; }
+  html[data-theme] body,
+  html[data-theme] .themeFade {
+    transition: background-color .28s ease, color .28s ease, border-color .28s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html, html[data-theme] body, html[data-theme] .themeFade { transition: none; }
+  }
+`;
 
 // ---------------------------------------------------------------------------
 // i18n — English / Arabic (RTL)
@@ -142,6 +243,8 @@ const TRANSLATIONS = {
     mapCaption: (n) =>
       `${n} cases, projected from 384 dimensions down to 2 with PCA — distance here approximates, but doesn't replace, the real cosine search.`,
     langToggle: "العربية",
+    themeToDark: "Switch to dark mode",
+    themeToLight: "Switch to light mode",
     authArtTagline: "Faster field resolutions, grounded in every case your team has already solved.",
     errInvalidEmail: "Enter a valid email address.",
     errPasswordShort: "Password must be at least 6 characters.",
@@ -242,6 +345,8 @@ const TRANSLATIONS = {
     mapCaption: (n) =>
       `${n} حالة، تم إسقاطها من 384 بُعداً إلى بُعدين باستخدام PCA — المسافة هنا تقريبية، ولا تُغني عن البحث الحقيقي بالتشابه الجيبي.`,
     langToggle: "English",
+    themeToDark: "التبديل إلى الوضع الليلي",
+    themeToLight: "التبديل إلى الوضع النهاري",
     authArtTagline: "حلول ميدانية أسرع، مبنية على كل حالة قام فريقك بحلّها بالفعل.",
     errInvalidEmail: "أدخل بريداً إلكترونياً صحيحاً.",
     errPasswordShort: "يجب ألا تقل كلمة المرور عن 6 أحرف.",
@@ -296,6 +401,8 @@ function localizeError(msg, lang) {
 }
 
 const LangContext = createContext({ lang: "en", t: TRANSLATIONS.en, dir: "ltr", toggleLang: () => {} });
+const ThemeContext = createContext({ theme: "light", toggleTheme: () => {} });
+const useTheme = () => useContext(ThemeContext);
 const useLang = () => useContext(LangContext);
 
 // ---------------------------------------------------------------------------
@@ -305,6 +412,13 @@ const useLang = () => useContext(LangContext);
 // every call site works unchanged.
 // ---------------------------------------------------------------------------
 function Logo({ height = 34, mono = false, animateArc = false }) {
+  const { theme } = useTheme();
+  // The source art is black text + a red arc. It needs inverting both on
+  // explicitly dark panels (mono) and throughout dark mode, where the page
+  // itself is the dark surface -- otherwise the wordmark goes near-invisible.
+  // Set here rather than in CSS because the inline filter would override any
+  // stylesheet rule.
+  const invert = mono || theme === "dark";
   return (
     <img
       src="/logo.png"
@@ -314,9 +428,7 @@ function Logo({ height = 34, mono = false, animateArc = false }) {
         height,
         width: "auto",
         display: "block",
-        // The source art is black text + a red arc; invert it to solid white
-        // for use on dark panels.
-        filter: mono ? "brightness(0) invert(1)" : "none",
+        filter: invert ? "brightness(0) invert(1)" : "none",
         animation: animateArc ? "logoReveal 0.7s ease forwards" : undefined,
       }}
     />
@@ -393,6 +505,20 @@ const CASE_COUNT = 66;
 // in-memory state rather than breaking the app.
 const SESSION_KEY = "supportbot.session";
 const LANG_KEY = "supportbot.lang";
+const THEME_KEY = "supportbot.theme";
+
+// An explicit choice wins forever; with no stored choice we follow the OS.
+// Deliberately a one-shot read, not a live subscription: once someone has
+// toggled, the OS flipping at sunset must not override them.
+function initialTheme() {
+  const stored = readStored(THEME_KEY, null);
+  if (stored === "dark" || stored === "light") return stored;
+  try {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
 
 function readStored(key, fallback) {
   try {
@@ -418,6 +544,21 @@ export default function App() {
   // valid for a week; an expired one simply fails the next API call).
   const [session, setSession] = useState(() => readStored(SESSION_KEY, null));
   const [lang, setLang] = useState(() => (readStored(LANG_KEY, "en") === "ar" ? "ar" : "en"));
+  const [theme, setTheme] = useState(initialTheme);
+
+  // The attribute lives on <html> so the page background itself themes -- on
+  // <body> or the app root, overscroll would reveal a white gutter.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.style.colorScheme = theme; // themes native scrollbars/controls
+  }, [theme]);
+
+  const toggleTheme = () =>
+    setTheme((prev) => {
+      const next = prev === "light" ? "dark" : "light";
+      writeStored(THEME_KEY, next);
+      return next;
+    });
 
   const dir = lang === "ar" ? "rtl" : "ltr";
   const t = TRANSLATIONS[lang];
@@ -440,6 +581,7 @@ export default function App() {
   };
 
   return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
     <LangContext.Provider value={{ lang, t, dir, toggleLang }}>
       <div style={styles.root} dir={dir} className={lang === "ar" ? "langAr" : "langEn"}>
         <GlobalStyle />
@@ -454,6 +596,45 @@ export default function App() {
         </div>
       </div>
     </LangContext.Provider>
+    </ThemeContext.Provider>
+  );
+}
+
+// Sun/moon toggle. Shows the theme you'd switch *to*, which is the convention
+// users expect from a single-button toggle.
+function ThemeToggle({ small = false }) {
+  const { theme, toggleTheme } = useTheme();
+  const { t } = useLang();
+  const dark = theme === "dark";
+  const label = dark ? t.themeToLight : t.themeToDark;
+  return (
+    <button
+      onClick={toggleTheme}
+      className="themeBtn"
+      style={small ? styles.themeBtnSmall : styles.themeBtn}
+      aria-label={label}
+      title={label}
+    >
+      <span className="themeIcon" key={theme}>
+        {dark ? (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="2" />
+            <g stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6" />
+            </g>
+          </svg>
+        ) : (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M20.5 14.6A8.6 8.6 0 1 1 9.4 3.5a6.9 6.9 0 0 0 11.1 11.1Z"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
+      </span>
+    </button>
   );
 }
 
@@ -470,6 +651,7 @@ function Landing({ onStart, session }) {
           <a style={styles.navLink} href="#how">{t.navHow}</a>
           <a style={styles.navLink} href="#cases">{t.navCoverage}</a>
           <button style={styles.langBtn} onClick={toggleLang}>{t.langToggle}</button>
+          <ThemeToggle />
           <button style={styles.navBtn} className="navBtn" onClick={onStart}>
             {session ? t.navContinue(session.username) : t.navSignIn}
           </button>
@@ -833,7 +1015,7 @@ function Field({ label, ...props }) {
 }
 
 function Notice({ kind = "info", children }) {
-  const bg = kind === "error" ? "#FDECEC" : kind === "ok" ? "#EAF7EF" : "#F1F0EC";
+  const bg = kind === "error" ? "var(--c-errBg)" : kind === "ok" ? "var(--c-okBg)" : "var(--c-line)";
   const fg = kind === "error" ? C.redDark : kind === "ok" ? C.ok : C.ink;
   return (
     <div
@@ -1179,6 +1361,7 @@ function Chat({ session, onHome, onSignOut }) {
             <Logo height={38} />
           </button>
           <button style={styles.langBtnSmall} onClick={toggleLang}>{t.langToggle}</button>
+          <ThemeToggle small />
         </div>
         <div style={styles.sideSection}>
           <div style={styles.sideLabel}>{t.tryAsking}</div>
@@ -1503,7 +1686,7 @@ function EmbeddingScatter({ data }) {
             key={p.id}
             cx={sx(p.x)} cy={sy(p.y)}
             r={p.is_hit ? 5.5 : 3.5}
-            fill={p.is_hit ? C.red : "#C9C6C0"}
+            fill={p.is_hit ? C.red : "var(--c-mute)"}
             opacity={p.is_hit ? 1 : 0.55}
           >
             <title>{`${p.product} · ${p.category}`}</title>
@@ -1519,7 +1702,7 @@ function EmbeddingScatter({ data }) {
       <div style={styles.mapLegend}>
         <span><span style={{ ...styles.legendSwatch, background: C.ink, borderRadius: 2, transform: "rotate(45deg)" }} /> {t.legendQuery}</span>
         <span><span style={{ ...styles.legendSwatch, background: C.red }} /> {t.legendMatch}</span>
-        <span><span style={{ ...styles.legendSwatch, background: "#C9C6C0" }} /> {t.legendOther}</span>
+        <span><span style={{ ...styles.legendSwatch, background: "var(--c-mute)" }} /> {t.legendOther}</span>
       </div>
       <p style={styles.mapCaption}>
         {t.mapCaption(points.length)}
@@ -1548,7 +1731,7 @@ function Typing() {
 function SendArc() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 12h14M12 5l7 7-7 7" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 12h14M12 5l7 7-7 7" stroke="var(--c-onRed)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -1560,6 +1743,7 @@ function GlobalStyle() {
   return (
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+      ${THEME_CSS}
 
       * { box-sizing: border-box; }
       html, body, #root { margin: 0; height: 100%; }
@@ -1604,8 +1788,8 @@ function GlobalStyle() {
         to   { opacity: 1; transform: translateY(0); }
       }
       @keyframes pulseGlow {
-        0%,100% { box-shadow: 0 8px 20px rgba(227,6,19,.28); }
-        50%     { box-shadow: 0 10px 30px rgba(227,6,19,.48); }
+        0%,100% { box-shadow: 0 8px 20px rgba(var(--c-red-rgb),.28); }
+        50%     { box-shadow: 0 10px 30px rgba(var(--c-red-rgb),.48); }
       }
       @keyframes shimmerArc {
         0%,100% { opacity: .55; transform: scaleX(1); }
@@ -1623,8 +1807,8 @@ function GlobalStyle() {
         40%, 60% { transform: translateX(4px); }
       }
       @keyframes livePulseKf {
-        0%, 100% { box-shadow: 0 0 0 0 rgba(31,157,85,.5); }
-        50%      { box-shadow: 0 0 0 5px rgba(31,157,85,0); }
+        0%, 100% { box-shadow: 0 0 0 0 rgba(var(--c-ok-rgb),.5); }
+        50%      { box-shadow: 0 0 0 5px rgba(var(--c-ok-rgb),0); }
       }
       @keyframes searchScanKf {
         0%   { left: -40%; }
@@ -1664,19 +1848,19 @@ function GlobalStyle() {
       .ghostBtn:hover { transform: translateX(3px); opacity: .7; }
 
       .navBtn { transition: transform .15s ease, background .15s ease, color .15s ease; }
-      .navBtn:hover { transform: translateY(-2px); background: ${C.ink}; color: #fff; }
+      .navBtn:hover { transform: translateY(-2px); background: var(--c-inkSurface); color: var(--c-onInk); }
 
       .suggestBtn { transition: transform .18s cubic-bezier(.34,1.56,.64,1), border-color .15s ease, box-shadow .2s ease; }
-      .suggestBtn:hover { transform: translateX(4px) scale(1.02); border-color: ${C.red}; box-shadow: 0 6px 16px rgba(227,6,19,.12); }
+      .suggestBtn:hover { transform: translateX(4px) scale(1.02); border-color: ${C.red}; box-shadow: 0 6px 16px rgba(var(--c-red-rgb),.12); }
 
       .hitCardHover { transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease; }
-      .hitCardHover:hover { transform: translateY(-3px) scale(1.015); box-shadow: 0 12px 28px rgba(26,26,26,.1); }
+      .hitCardHover:hover { transform: translateY(-3px) scale(1.015); box-shadow: 0 12px 28px rgba(var(--c-shadow-rgb),.1); }
 
       .chipHover { transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease, border-color .15s ease; }
-      .chipHover:hover { transform: translateY(-3px) scale(1.05); border-color: ${C.red}; box-shadow: 0 8px 20px rgba(227,6,19,.22); }
+      .chipHover:hover { transform: translateY(-3px) scale(1.05); border-color: ${C.red}; box-shadow: 0 8px 20px rgba(var(--c-red-rgb),.22); }
 
       .stepCard { transition: transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .25s ease; }
-      .stepCard:hover { transform: translateY(-6px); box-shadow: 0 16px 34px rgba(26,26,26,.1); }
+      .stepCard:hover { transform: translateY(-6px); box-shadow: 0 16px 34px rgba(var(--c-shadow-rgb),.1); }
 
       .sendBtn { transition: transform .15s cubic-bezier(.34,1.56,.64,1); }
       .sendBtn:hover { transform: scale(1.08) rotate(4deg); }
@@ -1690,14 +1874,14 @@ function GlobalStyle() {
 
       .themedScroll::-webkit-scrollbar { width: 8px; height: 8px; }
       .themedScroll::-webkit-scrollbar-track { background: transparent; }
-      .themedScroll::-webkit-scrollbar-thumb { background: rgba(227,6,19,.22); border-radius: 999px; }
-      .themedScroll::-webkit-scrollbar-thumb:hover { background: rgba(227,6,19,.4); }
+      .themedScroll::-webkit-scrollbar-thumb { background: rgba(var(--c-red-rgb),.22); border-radius: 999px; }
+      .themedScroll::-webkit-scrollbar-thumb:hover { background: rgba(var(--c-red-rgb),.4); }
 
       .avatarHover { transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease; }
-      .avatarHover:hover { transform: scale(1.08); box-shadow: 0 0 0 4px rgba(227,6,19,.15); }
+      .avatarHover:hover { transform: scale(1.08); box-shadow: 0 0 0 4px rgba(var(--c-red-rgb),.15); }
 
       .authBtnAnim { transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease; }
-      .authBtnAnim:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(227,6,19,.32); }
+      .authBtnAnim:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(var(--c-red-rgb),.32); }
       .authBtnAnim:active { transform: translateY(0) scale(.98); }
 
       .signOutBtn { transition: transform .15s ease, border-color .15s ease; }
@@ -1705,9 +1889,9 @@ function GlobalStyle() {
 
       .userBubbleIn { animation: popIn .35s cubic-bezier(.34,1.56,.64,1) both; }
 
-      input:focus { outline: none; border-color: ${C.red} !important; box-shadow: 0 0 0 3px rgba(227,6,19,.12); }
+      input:focus { outline: none; border-color: ${C.red} !important; box-shadow: 0 0 0 3px rgba(var(--c-red-rgb),.12); }
 
-      ::selection { background: rgba(227,6,19,.16); }
+      ::selection { background: rgba(var(--c-red-rgb),.16); }
 
       /* Keyboard focus only (not on mouse click): a branded ring so the whole
          app is navigable by keyboard, which it previously wasn't visibly. */
@@ -1724,14 +1908,14 @@ function GlobalStyle() {
         display: inline-flex; align-items: center; gap: 5px; line-height: 1;
         transition: background .16s ease, color .16s ease, transform .16s cubic-bezier(.34,1.56,.64,1);
       }
-      .answerBtn:hover { background: rgba(26,26,26,.055); color: ${C.ink}; transform: translateY(-1px); }
-      .answerBtn.up:hover { background: rgba(31,157,85,.13); color: ${C.ok}; }
-      .answerBtn.down:hover { background: rgba(227,6,19,.10); color: ${C.red}; }
+      .answerBtn:hover { background: rgba(${TINT},.055); color: ${C.ink}; transform: translateY(-1px); }
+      .answerBtn.up:hover { background: rgba(var(--c-ok-rgb),.13); color: ${C.ok}; }
+      .answerBtn.down:hover { background: rgba(var(--c-red-rgb),.10); color: ${C.red}; }
       .answerBtn:active { transform: scale(.92); }
 
       /* Answer bubbles lift a touch on hover — subtle depth, not a toy. */
       .botBubbleHover { transition: box-shadow .28s ease, transform .28s ease; }
-      .botBubbleHover:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(26,26,26,.10), 0 2px 8px rgba(26,26,26,.05); }
+      .botBubbleHover:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(var(--c-shadow-rgb),.10), 0 2px 8px rgba(var(--c-shadow-rgb),.05); }
 
       @keyframes floatArc {
         0%,100% { transform: translateY(0) scaleX(1); opacity: .5; }
@@ -1759,7 +1943,7 @@ function GlobalStyle() {
         .mobileMenuBtn {
           display: inline-flex !important; align-items: center; justify-content: center;
           width: 40px; height: 40px; border-radius: 11px; border: 1.5px solid ${C.line};
-          background: #fff; color: ${C.ink}; flex-shrink: 0;
+          background: var(--c-paper2); color: ${C.ink}; flex-shrink: 0;
           transition: border-color .15s ease, transform .15s ease;
         }
         .mobileMenuBtn:hover { border-color: ${C.red}; }
@@ -1818,6 +2002,18 @@ const styles = {
     border: `1.5px solid ${C.line}`, background: "transparent", color: C.mute,
     padding: "5px 11px", borderRadius: 999, fontSize: 11.5, fontWeight: 700,
   },
+  // Square so the icon stays optically centred; the sun and moon glyphs have
+  // different bounding boxes and a pill would make them look off-centre.
+  themeBtn: {
+    border: `1.5px solid ${C.line}`, background: "transparent", color: C.mute,
+    width: 38, height: 38, borderRadius: 999,
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+  },
+  themeBtnSmall: {
+    border: `1.5px solid ${C.line}`, background: "transparent", color: C.mute,
+    width: 28, height: 28, borderRadius: 999,
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+  },
 
   hero: {
     display: "grid", gridTemplateColumns: "1.05fr .95fr", gap: 40,
@@ -1832,27 +2028,27 @@ const styles = {
   sub: { fontSize: 17, lineHeight: 1.6, color: C.mute, maxWidth: 480, margin: "22px 0 0" },
   heroCtas: { display: "flex", gap: 14, marginTop: 30, alignItems: "center" },
   primaryBtn: {
-    background: C.red, color: "#fff", border: "none", padding: "14px 26px",
+    background: "var(--c-redSurface)", color: "var(--c-onRed)", border: "none", padding: "14px 26px",
     borderRadius: 999, fontSize: 15, fontWeight: 700,
-    boxShadow: "0 8px 20px rgba(227,6,19,.28)", transition: "transform .15s ease",
+    boxShadow: "0 8px 20px rgba(var(--c-red-rgb),.28)", transition: "transform .15s ease",
   },
   ghostBtn: { color: C.ink, fontWeight: 600, fontSize: 15, padding: "14px 8px" },
 
   heroPanel: { display: "flex", justifyContent: "center", position: "relative", zIndex: 1 },
   preview: {
     width: "100%", maxWidth: 380, background: C.paper2, borderRadius: 18,
-    border: `1px solid ${C.line}`, boxShadow: "0 24px 60px rgba(26,26,26,.12)",
+    border: `1px solid ${C.line}`, boxShadow: "0 24px 60px rgba(var(--c-shadow-rgb),.12)",
     overflow: "hidden",
   },
   previewBar: {
     display: "flex", alignItems: "center", gap: 7, padding: "12px 16px",
-    borderBottom: `1px solid ${C.line}`, background: "#fff",
+    borderBottom: `1px solid ${C.line}`, background: "var(--c-paper2)",
   },
   dot: { width: 10, height: 10, borderRadius: 999, display: "inline-block" },
   previewTitle: { marginLeft: 8, fontSize: 13, fontWeight: 700, color: C.mute },
   previewBody: { padding: 16, display: "flex", flexDirection: "column", gap: 10 },
   bubbleUser: {
-    alignSelf: "flex-end", background: C.ink, color: "#fff", padding: "10px 14px",
+    alignSelf: "flex-end", background: "var(--c-inkSurface)", color: "var(--c-onInk)", padding: "10px 14px",
     borderRadius: "14px 14px 4px 14px", fontSize: 13.5, maxWidth: "85%",
   },
   bubbleBot: {
@@ -1891,8 +2087,8 @@ const styles = {
     minHeight: "100vh", width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr",
   },
   authArt: {
-    background: `linear-gradient(150deg, ${C.ink} 0%, #2a2a2a 100%)`,
-    color: "#fff", padding: "60px 56px", display: "flex", flexDirection: "column",
+    background: `var(--c-inkGrad)`,
+    color: "var(--c-onRed)", padding: "60px 56px", display: "flex", flexDirection: "column",
     justifyContent: "center",
   },
   authArtTitle: { fontSize: 40, fontWeight: 800, margin: "26px 0 14px", letterSpacing: -1 },
@@ -1901,7 +2097,7 @@ const styles = {
   authPanel: {
     display: "flex", flexDirection: "column", justifyContent: "center",
     alignItems: "center", padding: "40px 24px", position: "relative",
-    background: "#FFFFFF",
+    background: "var(--c-paper2)",
   },
   backLink: {
     position: "absolute", top: 24, insetInlineStart: 24, background: "transparent",
@@ -1915,13 +2111,13 @@ const styles = {
   fieldLabel: { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 7, color: C.ink },
   input: {
     width: "100%", padding: "12px 14px", borderRadius: 11, fontSize: 15,
-    border: `1.5px solid ${C.line}`, background: "#fff", color: C.ink,
+    border: `1.5px solid ${C.line}`, background: "var(--c-paper2)", color: C.ink,
     transition: "border-color .15s ease, box-shadow .15s ease",
   },
   authBtn: {
-    width: "100%", background: C.red, color: "#fff", border: "none",
+    width: "100%", background: "var(--c-redSurface)", color: "var(--c-onRed)", border: "none",
     padding: "13px", borderRadius: 11, fontSize: 15, fontWeight: 700, marginTop: 6,
-    boxShadow: "0 8px 20px rgba(227,6,19,.24)",
+    boxShadow: "0 8px 20px rgba(var(--c-red-rgb),.24)",
   },
   authLinks: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1933,7 +2129,7 @@ const styles = {
   // Chat
   chatShell: { display: "flex", height: "100vh", background: C.paper },
   sidebar: {
-    width: 270, borderRight: `1px solid ${C.line}`, background: "#fff",
+    width: 270, borderRight: `1px solid ${C.line}`, background: "var(--c-paper2)",
     display: "flex", flexDirection: "column",
   },
   sideSection: { padding: "6px 12px" },
@@ -1948,7 +2144,7 @@ const styles = {
   },
   userRow: { display: "flex", gap: 10, alignItems: "center", marginBottom: 12 },
   avatar: {
-    width: 38, height: 38, borderRadius: 999, background: C.red, color: "#fff",
+    width: 38, height: 38, borderRadius: 999, background: "var(--c-redSurface)", color: "var(--c-onRed)",
     display: "flex", alignItems: "center", justifyContent: "center",
     fontWeight: 800, fontSize: 16, flexShrink: 0,
   },
@@ -1962,12 +2158,12 @@ const styles = {
   chatMain: {
     flex: 1, display: "flex", flexDirection: "column", minWidth: 0,
     background:
-      "radial-gradient(1100px 460px at 82% -12%, rgba(227,6,19,.055), transparent 62%)," +
-      "radial-gradient(820px 480px at -8% 112%, rgba(26,26,26,.04), transparent 60%)," +
-      "linear-gradient(180deg, #FAFAF8 0%, #F4F2EE 100%)",
+      "radial-gradient(1100px 460px at 82% -12%, rgba(var(--c-red-rgb),.055), transparent 62%)," +
+      `radial-gradient(820px 480px at -8% 112%, rgba(${TINT},.04), transparent 60%),` +
+      "var(--c-paperGrad)",
   },
   chatHead: {
-    padding: "0 28px", borderBottom: `1px solid ${C.line}`, background: "#fff",
+    padding: "0 28px", borderBottom: `1px solid ${C.line}`, background: "var(--c-paper2)",
   },
   chatHeadInner: {
     width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -1977,19 +2173,19 @@ const styles = {
   chatSubtitle: { fontSize: 13, color: C.mute, marginTop: 2 },
   livePill: {
     display: "flex", alignItems: "center", gap: 7, padding: "6px 13px",
-    borderRadius: 999, border: `1px solid ${C.line}`, background: "#fff",
+    borderRadius: 999, border: `1px solid ${C.line}`, background: "var(--c-paper2)",
     fontSize: 12, fontWeight: 700, color: C.ink, letterSpacing: 0.3,
   },
   liveDot: { width: 7, height: 7, borderRadius: 999, background: C.ok, display: "inline-block" },
   searchingBox: {
     position: "relative", overflow: "hidden",
-    background: "#fff", border: `1px solid ${C.line}`,
+    background: "var(--c-paper2)", border: `1px solid ${C.line}`,
     padding: "12px 16px", borderRadius: "16px 16px 16px 4px",
-    boxShadow: "0 6px 20px rgba(26,26,26,.06), 0 1px 3px rgba(26,26,26,.04)",
+    boxShadow: "0 6px 20px rgba(var(--c-shadow-rgb),.06), 0 1px 3px rgba(var(--c-shadow-rgb),.04)",
   },
   searchingScan: {
     position: "absolute", top: 0, bottom: 0, width: "40%",
-    background: "linear-gradient(90deg, transparent, rgba(227,6,19,.08), transparent)",
+    background: "linear-gradient(90deg, transparent, rgba(var(--c-red-rgb),.08), transparent)",
   },
   searchingText: {
     position: "relative", display: "flex", alignItems: "center",
@@ -2004,13 +2200,13 @@ const styles = {
   rowLeft: { display: "flex", justifyContent: "flex-start" },
   rowRight: { display: "flex", justifyContent: "flex-end" },
   userBubble: {
-    background: C.ink, color: "#fff", padding: "12px 16px", borderRadius: "16px 16px 4px 16px",
+    background: "var(--c-inkSurface)", color: "var(--c-onInk)", padding: "12px 16px", borderRadius: "16px 16px 4px 16px",
     fontSize: 14.5, maxWidth: 560, lineHeight: 1.5,
   },
   botBubble: {
-    background: "#fff", border: `1px solid ${C.line}`, padding: "14px 18px",
+    background: "var(--c-paper2)", border: `1px solid ${C.line}`, padding: "14px 18px",
     borderRadius: "18px 18px 18px 5px", fontSize: 14.5, maxWidth: 620, lineHeight: 1.55,
-    boxShadow: "0 6px 20px rgba(26,26,26,.06), 0 1px 3px rgba(26,26,26,.04)",
+    boxShadow: "0 6px 20px rgba(var(--c-shadow-rgb),.06), 0 1px 3px rgba(var(--c-shadow-rgb),.04)",
   },
 
   // Gap between consecutive Problem/Resolution cases in one reply.
@@ -2029,8 +2225,8 @@ const styles = {
     fontWeight: 700, color: C.red, cursor: "pointer",
   },
   mapPanel: {
-    marginTop: 8, background: "#fff", border: `1px solid ${C.line}`,
-    borderRadius: 14, padding: "16px 18px", boxShadow: "0 6px 20px rgba(26,26,26,.06), 0 1px 3px rgba(26,26,26,.04)",
+    marginTop: 8, background: "var(--c-paper2)", border: `1px solid ${C.line}`,
+    borderRadius: 14, padding: "16px 18px", boxShadow: "0 6px 20px rgba(var(--c-shadow-rgb),.06), 0 1px 3px rgba(var(--c-shadow-rgb),.04)",
   },
   mapLoading: {
     display: "flex", alignItems: "center", fontSize: 13.5, color: C.mute, padding: "20px 0",
@@ -2049,9 +2245,9 @@ const styles = {
   hitIntro: { fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.mute, marginBottom: 12 },
   hitList: { display: "flex", flexDirection: "column", gap: 12 },
   hitCard: {
-    background: "#fff", border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.red}`,
+    background: "var(--c-paper2)", border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.red}`,
     borderRadius: 12, padding: "14px 16px", maxWidth: 620,
-    boxShadow: "0 6px 20px rgba(26,26,26,.06), 0 1px 3px rgba(26,26,26,.04)",
+    boxShadow: "0 6px 20px rgba(var(--c-shadow-rgb),.06), 0 1px 3px rgba(var(--c-shadow-rgb),.04)",
   },
   hitTop: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 },
   hitRank: { fontSize: 12, fontWeight: 800, color: C.red },
@@ -2062,7 +2258,7 @@ const styles = {
   },
   hitId: { fontSize: 12, color: C.mute, marginLeft: "auto", fontVariantNumeric: "tabular-nums" },
   hitDist: {
-    fontSize: 11.5, fontWeight: 700, color: C.red, background: "#FDECEC",
+    fontSize: 11.5, fontWeight: 700, color: C.red, background: "var(--c-errBg)",
     borderRadius: 999, padding: "2px 9px", fontVariantNumeric: "tabular-nums",
   },
   hitProblem: { fontSize: 14, color: C.ink, marginBottom: 10, lineHeight: 1.5 },
@@ -2073,8 +2269,8 @@ const styles = {
   tdot: { width: 7, height: 7, borderRadius: 999, background: C.mute, display: "inline-block" },
 
   composer: {
-    padding: "16px 28px 22px", borderTop: `1px solid ${C.line}`, background: "#fff",
-    boxShadow: "0 -4px 18px rgba(26,26,26,.035)",
+    padding: "16px 28px 22px", borderTop: `1px solid ${C.line}`, background: "var(--c-paper2)",
+    boxShadow: "0 -4px 18px rgba(var(--c-shadow-rgb),.035)",
   },
   composerInner: {
     width: "100%", display: "flex", gap: 12, alignItems: "center",
@@ -2086,8 +2282,8 @@ const styles = {
     transition: "border-color .2s ease, box-shadow .2s ease",
   },
   sendBtn: {
-    width: 46, height: 46, borderRadius: 999, background: C.red, border: "none",
+    width: 46, height: 46, borderRadius: 999, background: "var(--c-redSurface)", border: "none",
     display: "flex", alignItems: "center", justifyContent: "center",
-    boxShadow: "0 6px 16px rgba(227,6,19,.3)", transition: "opacity .15s ease", flexShrink: 0,
+    boxShadow: "0 6px 16px rgba(var(--c-red-rgb),.3)", transition: "opacity .15s ease", flexShrink: 0,
   },
 };
