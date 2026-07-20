@@ -1680,6 +1680,16 @@ function GlobalStyle() {
 
       input:focus { outline: none; border-color: ${C.red} !important; box-shadow: 0 0 0 3px rgba(227,6,19,.12); }
 
+      ::selection { background: rgba(227,6,19,.16); }
+
+      /* Keyboard focus only (not on mouse click): a branded ring so the whole
+         app is navigable by keyboard, which it previously wasn't visibly. */
+      button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+        outline: 2px solid ${C.red};
+        outline-offset: 2px;
+        border-radius: 10px;
+      }
+
       /* Unified answer-toolbar buttons (copy / thumbs) — ghost, not boxed. */
       .answerBtn {
         background: transparent; border: 1px solid transparent; border-radius: 9px;
@@ -1948,7 +1958,7 @@ const styles = {
     position: "relative", overflow: "hidden",
     background: "#fff", border: `1px solid ${C.line}`,
     padding: "12px 16px", borderRadius: "16px 16px 16px 4px",
-    boxShadow: "0 4px 14px rgba(26,26,26,.05)",
+    boxShadow: "0 6px 20px rgba(26,26,26,.06), 0 1px 3px rgba(26,26,26,.04)",
   },
   searchingScan: {
     position: "absolute", top: 0, bottom: 0, width: "40%",
@@ -1993,7 +2003,7 @@ const styles = {
   },
   mapPanel: {
     marginTop: 8, background: "#fff", border: `1px solid ${C.line}`,
-    borderRadius: 14, padding: "16px 18px", boxShadow: "0 4px 14px rgba(26,26,26,.05)",
+    borderRadius: 14, padding: "16px 18px", boxShadow: "0 6px 20px rgba(26,26,26,.06), 0 1px 3px rgba(26,26,26,.04)",
   },
   mapLoading: {
     display: "flex", alignItems: "center", fontSize: 13.5, color: C.mute, padding: "20px 0",
@@ -2014,7 +2024,7 @@ const styles = {
   hitCard: {
     background: "#fff", border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.red}`,
     borderRadius: 12, padding: "14px 16px", maxWidth: 620,
-    boxShadow: "0 4px 14px rgba(26,26,26,.05)",
+    boxShadow: "0 6px 20px rgba(26,26,26,.06), 0 1px 3px rgba(26,26,26,.04)",
   },
   hitTop: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 },
   hitRank: { fontSize: 12, fontWeight: 800, color: C.red },
@@ -2037,6 +2047,7 @@ const styles = {
 
   composer: {
     padding: "16px 28px 22px", borderTop: `1px solid ${C.line}`, background: "#fff",
+    boxShadow: "0 -4px 18px rgba(26,26,26,.035)",
   },
   composerInner: {
     width: "100%", display: "flex", gap: 12, alignItems: "center",
