@@ -32,6 +32,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import logging
 import random
+import re
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -196,6 +197,41 @@ class ChatResponse(BaseModel):
 GOOD_MATCH_MAX_DISTANCE = 0.65
 
 
+# Referring expressions that mean a message is leaning on an earlier turn
+# rather than standing on its own ("and it still fails", "does it happen on
+# the T5?"). Deliberately narrow: only actual referring words, so a short but
+# self-contained question like "device reboots randomly" is left alone.
+_REFERRING_WORDS = {"it", "its", "they", "them", "that", "this", "these", "those", "same", "one"}
+
+
+def _contextualize(query: str, history: list[dict] | None) -> str:
+    """Prepend the previous question when the current one can't stand alone.
+
+    Retrieval runs on the current message only, so a bare follow-up carries no
+    product or symptom words and retrieves badly -- the LLM gets the history,
+    but the search doesn't. When the message contains a referring word and is
+    short, we search "previous question + follow-up" instead. Purely lexical:
+    no extra model call, and a self-contained question is never touched.
+    """
+    if not history:
+        return query
+    words = re.findall(r"\w+", query.lower())
+    if not words or len(words) > 10:
+        return query  # long questions carry their own context
+    if not any(w in _REFERRING_WORDS for w in words):
+        return query  # self-contained -- leave it exactly as typed
+
+    last_user = next(
+        (
+            (turn.get("text") or "").strip()
+            for turn in reversed(history)
+            if turn.get("role") == "user" and (turn.get("text") or "").strip()
+        ),
+        "",
+    )
+    return f"{last_user} {query}".strip() if last_user else query
+
+
 def _fallback_reply(hits: list[dict], arabic: bool = False) -> str:
     """A deterministic, LLM-free reply for when Gemini is unavailable (no key,
     network down, or free-tier quota exhausted).
@@ -255,6 +291,10 @@ def chat(req: ChatRequest, request: Request) -> dict:
     # query (q) still goes to generate_reply so Gemini replies in the
     # user's own language; only retrieval uses the English version.
     search_query = translate_to_english(q)
+    # A bare follow-up ("and it still fails") carries no product or symptom
+    # words of its own, so retrieval needs the previous question folded in.
+    # The LLM still receives the full history separately.
+    search_query = _contextualize(search_query, req.history)
 
     # A bare product name ("AeroSense G2") is a browse, not a problem: answer it
     # with a count + one example + a prompt for the real symptom, instead of

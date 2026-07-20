@@ -197,6 +197,35 @@ def test_signup_rate_limited(client):
     assert any(c == 200 for c in codes[:5])
 
 
+# --- retrieval query contextualization --------------------------------------
+
+_HIST = [
+    {"role": "user", "text": "my ThermoNode T5 firmware update keeps failing"},
+    {"role": "bot", "text": "Power was interrupted during flashing."},
+]
+
+
+def test_contextualize_folds_in_previous_question_for_a_followup():
+    # "it" is a referring word -> the follow-up can't stand alone.
+    out = main._contextualize("does it happen on the X200 too", _HIST)
+    assert out.startswith("my ThermoNode T5 firmware update keeps failing")
+    assert "does it happen on the X200 too" in out
+
+
+def test_contextualize_leaves_self_contained_query_untouched():
+    # Short, but carries its own product + symptom: must NOT be polluted.
+    assert main._contextualize("device reboots randomly", _HIST) == "device reboots randomly"
+
+
+def test_contextualize_leaves_long_query_untouched():
+    long_q = "the AeroSense G3 display shows nothing at all after I power it on in the field"
+    assert main._contextualize(long_q, _HIST) == long_q
+
+
+def test_contextualize_noop_without_history():
+    assert main._contextualize("and it still fails", None) == "and it still fails"
+
+
 # --- feedback ---------------------------------------------------------------
 
 def test_feedback_records_and_aggregates(client):
