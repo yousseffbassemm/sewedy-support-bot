@@ -121,6 +121,13 @@ const TRANSLATIONS = {
     signOut: "Sign out",
     composerPlaceholder: "Describe the issue…",
     send: "Send",
+    suggestions: [
+      "Readings drift higher after install",
+      "Unit fails the compliance self-check",
+      "Screen shows nothing after power on",
+      "Device reboots randomly",
+    ],
+    previewMeta: (d) => `matched in 0.3s · cosine ${d}`,
     welcome: (name) =>
       `Hi ${name || "there"} — describe a device issue and I'll find the closest resolved cases.`,
     searching: "Searching by meaning…",
@@ -212,6 +219,13 @@ const TRANSLATIONS = {
     signOut: "تسجيل الخروج",
     composerPlaceholder: "صف المشكلة…",
     send: "إرسال",
+    suggestions: [
+      "القراءات ترتفع تدريجياً بعد التركيب",
+      "الوحدة تفشل في فحص المطابقة الذاتي",
+      "الشاشة لا تعرض شيئاً بعد التشغيل",
+      "الجهاز يعيد التشغيل بشكل عشوائي",
+    ],
+    previewMeta: (d) => `طوبِقت في 0.3 ثانية · جيب التمام ${d}`,
     welcome: (name) =>
       `مرحباً ${name || "بك"} — صف مشكلة الجهاز وسأجد أقرب الحالات التي تم حلّها.`,
     searching: "يبحث بالمعنى…",
@@ -563,7 +577,44 @@ const PREVIEW_CONVOS = [
   },
 ];
 
+// Arabic parallel of the landing-page preview. Product names stay as-is
+// (brand identifiers); everything else is translated so Arabic mode has no
+// English leaking into the hero.
+const PREVIEW_CONVOS_AR = [
+  {
+    q: "القراءات ترتفع تدريجياً بعد التركيب",
+    dist: "0.374",
+    hits: [
+      { product: "AeroSense G3", category: "الاتصال", cause: "تلوّث المستشعر بدخول الغبار", fix: "تنظيف حجرة المستشعر واستبدال فلتر السحب" },
+      { product: "ThermoNode T5", category: "التركيب", cause: "لم تتم معايرة الإزاحة الحرارية" },
+    ],
+  },
+  {
+    q: "الوحدة تفشل في فحص المطابقة الذاتي",
+    dist: "0.398",
+    hits: [
+      { product: "PowerTrack P1", category: "الإعدادات", cause: "الإعدادات أقل من الحد الإقليمي", fix: "تطبيق ملف إعدادات السياسة 7" },
+    ],
+  },
+  {
+    q: "الشاشة لا تعرض شيئاً بعد التشغيل",
+    dist: "0.421",
+    hits: [
+      { product: "ThermoNode T5", category: "الشاشة", cause: "احتراق منصهر الإضاءة الخلفية", fix: "استبدال منصهر الإضاءة الخلفية" },
+    ],
+  },
+  {
+    q: "الجهاز يعيد التشغيل بشكل عشوائي",
+    dist: "0.487",
+    hits: [
+      { product: "GridLink Hub", category: "الميكانيكا", cause: "الاهتزاز يُرخي كتلة التوصيل", fix: "إعادة ربط الأطراف وإضافة مانع ارتخاء" },
+    ],
+  },
+];
+
 function MockChatPreview() {
+  const { t, lang } = useLang();
+  const convos = lang === "ar" ? PREVIEW_CONVOS_AR : PREVIEW_CONVOS;
   const [convoIdx, setConvoIdx] = useState(0);
   const [step, setStep] = useState(0); // 0=question only, 1=typing, 2..=hits revealed, last=meta
   const [phase, setPhase] = useState("entering"); // entering -> idle -> exiting
@@ -572,7 +623,7 @@ function MockChatPreview() {
   const cardRef = useRef(null);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
 
-  const convo = PREVIEW_CONVOS[convoIdx];
+  const convo = convos[convoIdx % convos.length];
 
   // Subtle mouse-tilt parallax — the card leans gently toward the cursor.
   // Mouse-only by nature (no mousemove on touch), so it degrades gracefully.
@@ -617,18 +668,18 @@ function MockChatPreview() {
       timers.push({ cancel: () => cancelAnimationFrame(raf2) });
     });
 
-    let t = 550;
-    after(() => setStep(1), t); // show typing dots
+    let delay = 550;
+    after(() => setStep(1), delay); // show typing dots
     convo.hits.forEach((_, i) => {
-      t += 950;
-      after(() => setStep(2 + i), t); // reveal each hit in turn
+      delay += 950;
+      after(() => setStep(2 + i), delay); // reveal each hit in turn
     });
-    t += 950;
-    after(() => setStep(2 + convo.hits.length), t); // show meta line
-    t += 2200; // hold the finished conversation on screen
-    after(() => setPhase("exiting"), t);
-    t += 650; // must be >= the content fade duration, or we cut it short
-    after(() => setConvoIdx((c) => (c + 1) % PREVIEW_CONVOS.length), t);
+    delay += 950;
+    after(() => setStep(2 + convo.hits.length), delay); // show meta line
+    delay += 2200; // hold the finished conversation on screen
+    after(() => setPhase("exiting"), delay);
+    delay += 650; // must be >= the content fade duration, or we cut it short
+    after(() => setConvoIdx((c) => (c + 1) % convos.length), delay);
 
     return () => {
       cancelled = true;
@@ -669,7 +720,7 @@ function MockChatPreview() {
           height: boxHeight != null ? `${boxHeight}px` : "auto",
         }}
       >
-        <div ref={contentRef} style={contentStyle}>
+        <div ref={contentRef} style={contentStyle} dir={lang === "ar" ? "rtl" : "ltr"}>
           <div key={`q-${convoIdx}`} style={styles.bubbleUser}>
             {convo.q}
           </div>
@@ -697,7 +748,7 @@ function MockChatPreview() {
 
           {step >= 2 + convo.hits.length && (
             <div key={`meta-${convoIdx}`} style={styles.previewMeta} className="pop">
-              matched in 0.3s · cosine {convo.dist}
+              {t.previewMeta(convo.dist)}
             </div>
           )}
         </div>
@@ -1011,7 +1062,7 @@ function Forgot({ switchTo }) {
 // Chat app
 // ===========================================================================
 function Chat({ session, onHome, onSignOut }) {
-  const { t, toggleLang } = useLang();
+  const { t, lang, toggleLang } = useLang();
   const [messages, setMessages] = useState([
     {
       who: "bot",
@@ -1062,16 +1113,10 @@ function Chat({ session, onHome, onSignOut }) {
     }
   };
 
-  // Example queries stay in English on purpose — the real search backend
-  // (MiniLM + your corpus) is English-only, so these need to keep working
-  // when clicked, not just look translated. Each of these is backed by a
-  // real, resolved case in the corpus — verified against support_cases.csv.
-  const suggestions = [
-    "Readings drift higher after install",
-    "Unit fails the compliance self-check",
-    "Screen shows nothing after power on",
-    "Device reboots randomly",
-  ];
+  // Example queries, localized. Each is backed by a real resolved case in the
+  // corpus. The backend translates a non-English query to English before
+  // retrieval (translate_to_english), so the Arabic versions still match.
+  const suggestions = t.suggestions;
 
   return (
     <div style={styles.chatShell}>
@@ -1094,7 +1139,7 @@ function Chat({ session, onHome, onSignOut }) {
               key={s}
               style={{ ...styles.suggest, animationDelay: `${0.15 + i * 0.08}s` }}
               className="suggestBtn rise"
-              dir="ltr"
+              dir={lang === "ar" ? "rtl" : "ltr"}
               onClick={() => setInput(s)}
             >
               {s}
