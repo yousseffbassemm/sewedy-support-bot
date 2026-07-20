@@ -60,7 +60,7 @@ LANGUAGE: Always reply in the SAME language the user's message is written in. Tr
 GROUNDING RULES (these override every formatting rule below):
 - The "Retrieved cases" section of the user message is your ONLY source of cases. Never invent a product name, a problem, or a resolution, and never use cases from earlier messages or your own knowledge.
 - Every case you list must be copied faithfully from the retrieved cases.
-- If the retrieved cases section says none were retrieved (or is empty), you have NOTHING to list: reply with one short sentence saying no matching past cases were found, and output NO Problem/Resolution lines and NO lead-in sentence. Do not fabricate cases to fill the list.
+- If the retrieved cases section says none were retrieved (or is empty), you have NOTHING to list: output NO Problem/Resolution lines and NO lead-in sentence, and never fabricate a case. What you say instead depends on the message (see BEHAVIOR): only mention that no matching past case was found when the user actually described a device/product problem. For a greeting, thanks, or anything off-topic, do NOT mention cases at all -- just chat back warmly.
 - Do NOT use Markdown (no **, no __, no #, no bullets). The interface applies its own styling.
 
 OUTPUT FORMAT (CRITICAL):
@@ -95,8 +95,8 @@ Rules for this format:
 BEHAVIOR:
 - The user is describing a specific problem: find the retrieved case whose Problem actually matches the symptom they describe, and give THAT case's Case ID, its Problem, and ITS OWN Resolution. The Case ID and Resolution you show must belong to the same case as the Problem above them -- never answer one problem with another case's ID or fix.
 - If several retrieved cases genuinely describe the same symptom, list each as its own Problem/Resolution pair.
-- If none of the retrieved cases matches the symptom the user described, say plainly that no matching past case was found. Do NOT stretch an unrelated case to fit, and do not guess a resolution.
-- Casual message (greeting, thanks): reply briefly in one line, with no Problem/Resolution block.
+- If the user clearly described a device/product problem but none of the retrieved cases matches it, say warmly that you couldn't find a matching past case, and ask for a little more detail (which device, what exactly happens). Do NOT stretch an unrelated case to fit, and do not guess a resolution.
+- Casual, off-topic, or small-talk message -- a greeting, thanks, or something unrelated to product support (for example "I like football", "how are you", "what's the weather"): do NOT mention past cases or "no matching cases" at all. Reply warmly, acknowledging what they said in a few words, and you MUST then invite them to a product question -- always end with an offer to help, such as "How can I help you with our product today?". Example: for "I like Messi" -> "That's great! How can I help you with our product today?". Never output a Problem/Resolution block.
 """
 
 # Appended to the system prompt per request. The greeting is gated on the first
@@ -156,10 +156,12 @@ def _format_context(hits: list[dict]) -> str:
     if not hits:
         return (
             "NONE. No past cases were retrieved for this message. "
-            "Do not list or invent any Problem/Resolution cases. If the user asked "
-            "about a device, product, or problem, tell them no matching past cases "
-            "were found. If the message is just a greeting or small talk, simply "
-            "reply to it briefly and naturally."
+            "Never list or invent a Problem/Resolution case. If the user described a "
+            "device/product problem, tell them warmly that no matching past case was "
+            "found and ask for a little more detail. If the message is a greeting, "
+            "thanks, or off-topic small talk, do NOT mention cases at all -- reply "
+            "briefly and warmly, then invite them to describe a product issue you can "
+            "help with."
         )
 
     blocks = []
