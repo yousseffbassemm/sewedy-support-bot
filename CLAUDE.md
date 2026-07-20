@@ -16,9 +16,24 @@ whether continued extension or consolidating/presenting what exists is the bette
 
 - **Day 1 (ingestion):** `src/rag/config.py`, `src/rag/ingest.py`, `tests/test_ingest.py`
 - **Day 2 (embeddings + index + retrieve):** `src/rag/embeddings.py`, `src/rag/index.py`, `src/rag/retrieve.py`
-- **Backend (FastAPI):** `backend/main.py`, `auth.py`, `db.py`, `email_utils.py`, `llm.py`, `embedding_map.py`
+- **Backend (FastAPI):** `backend/main.py`, `auth.py`, `db.py`, `email_utils.py`, `llm.py`, `embedding_map.py`,
+  `security.py`
 - **Frontend (React):** `App.jsx` — landing page, full auth flow, chat interface, English/Arabic (RTL),
   embedding-space visualization, extensive animation work
+- **Productionization pass** (post-mentor-scope, all committed on `main`):
+  - Reliability: LLM reply/translation caching (LRU) + transient-error retry/backoff (`llm.py`); the
+    LLM-free fallback now lists retrieved cases directly or nudges toward a product question, so the bot
+    stays useful when Gemini's free-tier daily quota (20/day) is spent.
+  - Hardening: per-IP sliding-window rate limiting + account lockout (`security.py`), structured request
+    logging, lifespan startup (no deprecation).
+  - Answer quality: grounded answers cite the matching Case ID; small talk / off-topic handled
+    conversationally; multi-turn conversation memory (recent history sent to the LLM).
+  - Feedback loop: 👍/👎 on answers → `POST /feedback` → `Feedback` table; `GET /feedback/stats`.
+  - Tests + CI: `tests/test_backend.py` (FastAPI TestClient, mocked model/LLM); GitHub Actions runs the
+    suite + the retriever eval gate on push. `Dockerfile`/`docker-compose.yml` package the backend.
+  - The tracked repo `App.jsx` is now synced to the real running frontend (`supportbot-ui/src/App.jsx`);
+    they had drifted (1141 vs 1835 lines). NOTE: `supportbot-ui/` is still a separate, un-versioned
+    project — the only remaining source-of-truth gap.
 
 ## Key numbers (current corpus)
 
@@ -31,9 +46,9 @@ whether continued extension or consolidating/presenting what exists is the bette
 - Embedding provider: `local` (MiniLM, `all-MiniLM-L6-v2`), 384-dim
 - Vector store: ChromaDB, persistent, `data/chroma/`, collection `support_cases`
 - Answer generation: Gemini (`gemini-2.5-flash`), thinking disabled, grounding threshold 0.65 cosine distance
-- Tests: 35/35 passing (`tests/test_ingest.py` + `tests/test_retrieve.py`)
-- Retriever eval (`eval_set_public.json`, 15 queries): hybrid engine 100% Hit@1 on identifier
-  and paraphrase queries, 100% out-of-domain rejection, MRR@5 = 1.000.
+- Tests: 50/50 passing (`test_ingest.py` + `test_retrieve.py` + `test_backend.py`)
+- Retriever eval (`eval/eval_set_public.json`, 15 queries): hybrid engine 100% Hit@1 on identifier
+  and paraphrase queries, 100% out-of-domain rejection, MRR@5 = 1.000. Run: `uv run python -m eval.eval_retriever`.
 
 ## Known data-quality findings (from real testing, not code bugs)
 
@@ -70,19 +85,29 @@ whether continued extension or consolidating/presenting what exists is the bette
   to retrieve a *no-display* case over the correct *does-not-power-on* one. Semantic search and the product-name
   detector still use the original `_tokenize`, so the G2-vs-G3 model-number disambiguation is untouched.
 
-## What's intentionally NOT built
+## Closed since the productionization pass
 
-- Rate limiting / account lockout on auth endpoints (known security gap, flagged, not yet closed)
-- A persisted `pytest` suite for the backend (verified extensively by hand during development, not yet
-  written as a committed test file the way `test_ingest.py` is)
-- Translation of backend-returned error messages (API error strings are still English-only even in Arabic
-  mode)
-- Voice input, thumbs-up/down feedback on answers (proposed, not built — Arabic support was built first)
+- ~~Rate limiting / account lockout~~ — DONE (`security.py`).
+- ~~Persisted backend pytest suite~~ — DONE (`tests/test_backend.py`, + CI).
+- ~~Thumbs-up/down feedback~~ — DONE (`/feedback`, `Feedback` table, UI control).
+
+## What's still NOT built
+
+- **Admin case-management UI + re-index endpoint** — the biggest remaining feature. Adding/editing cases is
+  still done by hand in `support_cases.csv` + `uv run python -m rag.ingest && ... rag.index`.
+- **Query contextualization for retrieval** — conversation memory currently feeds the *LLM* prior turns, but
+  retrieval still runs on the raw current query, so a bare-pronoun follow-up ("and it still fails") may not
+  retrieve the right cases without the product/symptom words. A history-aware query rewrite would close this.
+- Translation of backend-returned error messages (still English-only even in Arabic mode).
+- Voice input.
+- Frontend Docker + full-stack `compose` (backend is containerized; `supportbot-ui` is not, since it lives
+  outside this repo).
 
 ## Repo
 
 - GitHub: https://github.com/yousseffbassemm/sewedy-support-bot
-- Branch: `feature/webapp` (web app work) — keep `main` at the clean Day 2 state for mentor review
+- Branch: `main` (all productionization work is committed here).
 - Local project name (`pyproject.toml`): `intern-rag`
 - Importable package: `rag` (in `src/rag/`)
-- Frontend: separate Vite project (`supportbot-ui`), `App.jsx` copied in from this repo's root
+- Frontend: separate Vite project (`supportbot-ui`); the tracked repo `App.jsx` is kept in sync with
+  `supportbot-ui/src/App.jsx` (the copy that actually runs).
