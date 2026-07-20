@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useContext, createContext } from "react";
+import { flushSync } from "react-dom";
 
 /* ============================================================================
    Elsewedy Electric — SupportBot  (BACKEND-CONNECTED build)
@@ -143,14 +144,178 @@ const THEME_CSS = `
     .themeIcon { animation: none; }
   }
 
-  /* Full-bleed background swap must not look like a flash of the old theme. */
-  html { transition: background-color .28s ease; }
-  html[data-theme] body,
-  html[data-theme] .themeFade {
-    transition: background-color .28s ease, color .28s ease, border-color .28s ease;
+  /* Theme crossfade.
+     Applied as a temporary class during the switch rather than as a standing
+     rule on *, because a permanent colour transition on every element makes
+     hover states feel laggy and fights the spring easings elsewhere.
+     A previous attempt transitioned only body plus a .themeFade class that was
+     never applied to anything, so the page background faded while every card,
+     border and label snapped -- which is what made the switch look broken. */
+  html.themeAnim *,
+  html.themeAnim *::before,
+  html.themeAnim *::after {
+    transition: background-color .40s ease, background-image .40s ease,
+                color .40s ease, border-color .40s ease, fill .40s ease,
+                stroke .40s ease, box-shadow .40s ease !important;
+    transition-delay: 0s !important;
   }
+  /* The logo swaps between two files, so it cannot crossfade by colour. */
+  html.themeAnim .logoWiggle img,
+  html.themeAnim header img,
+  html.themeAnim footer img { animation: logoSwap .40s ease; }
+  @keyframes logoSwap {
+    0%   { opacity: 1; }
+    45%  { opacity: .15; }
+    100% { opacity: 1; }
+  }
+
+  /* Circular reveal from the toggle, where supported. The new theme is
+     clipped in over the old one, so it reads as one deliberate gesture
+     instead of a global colour jump. */
+  ::view-transition-old(root) { animation: none; }
+  ::view-transition-new(root) {
+    animation: themeSweep .55s cubic-bezier(.22,.61,.36,1);
+    mix-blend-mode: normal;
+  }
+  @keyframes themeSweep {
+    from { clip-path: circle(0% at var(--theme-x, 50%) var(--theme-y, 50%)); }
+    to   { clip-path: circle(150% at var(--theme-x, 50%) var(--theme-y, 50%)); }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    html, html[data-theme] body, html[data-theme] .themeFade { transition: none; }
+    html.themeAnim *, html.themeAnim *::before, html.themeAnim *::after { transition: none !important; }
+    html.themeAnim .logoWiggle img, html.themeAnim header img, html.themeAnim footer img { animation: none; }
+    ::view-transition-new(root) { animation: none; }
+  }
+
+  /* -----------------------------------------------------------------------
+     Dark-mode depth.
+
+     Flat dark UIs read as dead mostly for two reasons: a single uniform
+     background with no light source, and 8-bit banding across large dark
+     gradients. This adds a slow aurora wash for the first and a grain layer
+     for the second, then gives surfaces a lit top edge so they look like
+     objects rather than rectangles.
+
+     The whole layer is opacity 0 in light mode -- the light palette already
+     has depth and the wash only muddies it.
+     -------------------------------------------------------------------- */
+  .ambient {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    overflow: hidden; opacity: 0; transition: opacity .6s ease;
+  }
+  html[data-theme="dark"] .ambient { opacity: 1; }
+  .ambient i {
+    position: absolute; display: block; border-radius: 50%;
+    filter: blur(90px);
+    /* Promoted up front: blur + transform repaints on a 50vw element are
+       expensive enough to drop frames mid-scroll otherwise. */
+    will-change: transform;
+  }
+  .ambient .b1 {
+    width: 54vw; height: 54vw; left: -14vw; top: -20vw;
+    background: radial-gradient(circle, rgba(var(--c-red-rgb),.22), transparent 68%);
+    animation: drift1 30s ease-in-out infinite;
+  }
+  .ambient .b2 {
+    width: 44vw; height: 44vw; right: -12vw; top: 14vh;
+    background: radial-gradient(circle, rgba(255,140,60,.10), transparent 68%);
+    animation: drift2 38s ease-in-out infinite;
+  }
+  .ambient .b3 {
+    width: 60vw; height: 60vw; left: 16vw; bottom: -30vw;
+    background: radial-gradient(circle, rgba(70,110,255,.10), transparent 70%);
+    animation: drift3 46s ease-in-out infinite;
+  }
+  @keyframes drift1 {
+    0%,100% { transform: translate3d(0,0,0) scale(1); }
+    50%     { transform: translate3d(6vw,4vh,0) scale(1.12); }
+  }
+  @keyframes drift2 {
+    0%,100% { transform: translate3d(0,0,0) scale(1.06); }
+    50%     { transform: translate3d(-5vw,6vh,0) scale(1); }
+  }
+  @keyframes drift3 {
+    0%,100% { transform: translate3d(0,0,0) scale(1); }
+    50%     { transform: translate3d(4vw,-5vh,0) scale(1.1); }
+  }
+
+  /* Grain. Static, tiled, and very low opacity -- animated grain reads as
+     video noise and is far more distracting than it looks in a demo. */
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    opacity: 0; transition: opacity .6s ease;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.42'/%3E%3C/svg%3E");
+  }
+  html[data-theme="dark"] .grain { opacity: .05; }
+
+  /* Content must sit above both layers. */
+  .pageIn { position: relative; z-index: 2; }
+
+  /* Surfaces get a top highlight, as if lit from above, plus a deeper
+     shadow. This is what separates a card from the page when the two are
+     only a few percent apart in luminance. */
+  html[data-theme="dark"] .stepCard,
+  html[data-theme="dark"] .pop {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 6px 20px rgba(0,0,0,.45);
+  }
+  html[data-theme="dark"] .stepCard:hover {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.09),
+                0 16px 34px rgba(0,0,0,.55),
+                0 0 0 1px rgba(var(--c-red-rgb),.22);
+  }
+  html[data-theme="dark"] .botBubbleHover:hover {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 14px 34px rgba(0,0,0,.5);
+  }
+
+  /* Brand-red controls glow instead of casting a shadow nothing can see. */
+  html[data-theme="dark"] .primaryBtn,
+  html[data-theme="dark"] .sendBtn,
+  html[data-theme="dark"] .authBtnAnim {
+    box-shadow: 0 6px 22px rgba(var(--c-red-rgb),.34);
+  }
+  html[data-theme="dark"] .primaryBtn:hover,
+  html[data-theme="dark"] .sendBtn:hover,
+  html[data-theme="dark"] .authBtnAnim:hover {
+    box-shadow: 0 10px 30px rgba(var(--c-red-rgb),.48);
+  }
+
+  /* Inputs read as holes cut in the surface rather than raised boxes. */
+  html[data-theme="dark"] input, html[data-theme="dark"] textarea {
+    background: rgba(0,0,0,.22);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.4);
+  }
+
+  html[data-theme="dark"] .navBtn:hover,
+  html[data-theme="dark"] .chipHover:hover,
+  html[data-theme="dark"] .suggestBtn:hover {
+    box-shadow: 0 8px 20px rgba(0,0,0,.45), 0 0 0 1px rgba(var(--c-red-rgb),.28);
+  }
+
+  /* The chat surface paints its own opaque gradient, which would sit on top of
+     the ambient layer and leave the screen users actually spend their time on
+     completely flat. In dark mode it drops to a translucent wash so the
+     aurora reads through it. */
+  html[data-theme="dark"] .chatMain {
+    background:
+      radial-gradient(1100px 460px at 82% -12%, rgba(var(--c-red-rgb),.10), transparent 62%),
+      linear-gradient(180deg, rgba(19,18,17,.72) 0%, rgba(14,13,12,.86) 100%) !important;
+  }
+  html[data-theme="dark"] .chatSidebar,
+  html[data-theme="dark"] .chatHead {
+    background: rgba(28,26,24,.72) !important;
+    backdrop-filter: blur(14px);
+  }
+
+  /* Scrollbars, which otherwise stay light grey and give the theme away. */
+  html[data-theme="dark"] .themedScroll { scrollbar-color: #3A3630 transparent; }
+  html[data-theme="dark"] .themedScroll::-webkit-scrollbar-thumb {
+    background: #3A3630; border-radius: 999px;
+  }
+  html[data-theme="dark"] .themedScroll::-webkit-scrollbar-track { background: transparent; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ambient i { animation: none !important; }
   }
 `;
 
@@ -574,12 +739,38 @@ export default function App() {
     document.documentElement.style.colorScheme = theme; // themes native scrollbars/controls
   }, [theme]);
 
-  const toggleTheme = () =>
-    setTheme((prev) => {
-      const next = prev === "light" ? "dark" : "light";
-      writeStored(THEME_KEY, next);
-      return next;
-    });
+  // `origin` is the toggle button's centre, so the reveal appears to come out
+  // of the control the user just pressed.
+  const toggleTheme = (origin) => {
+    const root = document.documentElement;
+    if (origin) {
+      root.style.setProperty("--theme-x", `${origin.x}px`);
+      root.style.setProperty("--theme-y", `${origin.y}px`);
+    }
+
+    const apply = () =>
+      setTheme((prev) => {
+        const next = prev === "light" ? "dark" : "light";
+        writeStored(THEME_KEY, next);
+        return next;
+      });
+
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) return apply();
+
+    // The colour crossfade runs regardless; the class is cleared afterwards so
+    // it never slows ordinary hover transitions.
+    root.classList.add("themeAnim");
+    window.setTimeout(() => root.classList.remove("themeAnim"), 460);
+
+    // View Transitions adds the circular sweep on top where supported
+    // (Chromium today). Elsewhere the crossfade alone is the full effect --
+    // this degrades quietly rather than gating the feature on browser support.
+    if (!document.startViewTransition) return apply();
+    // flushSync: startViewTransition snapshots the DOM synchronously, so a
+    // batched React update would land after the snapshot and not animate.
+    document.startViewTransition(() => flushSync(apply));
+  };
 
   const dir = lang === "ar" ? "rtl" : "ltr";
   const t = TRANSLATIONS[lang];
@@ -606,6 +797,12 @@ export default function App() {
     <LangContext.Provider value={{ lang, t, dir, toggleLang }}>
       <div style={styles.root} dir={dir} className={lang === "ar" ? "langAr" : "langEn"}>
         <GlobalStyle />
+        {/* Fixed, aria-hidden, pointer-events:none. Both fade to 0 in light
+            mode, so they cost nothing there but a composited layer. */}
+        <div className="ambient" aria-hidden="true">
+          <i className="b1" /><i className="b2" /><i className="b3" />
+        </div>
+        <div className="grain" aria-hidden="true" />
         <div key={route} className="pageIn">
           {route === "landing" && (
             <Landing session={session} onStart={() => setRoute(session ? "app" : "auth")} />
@@ -628,9 +825,14 @@ function ThemeToggle({ small = false }) {
   const { t } = useLang();
   const dark = theme === "dark";
   const label = dark ? t.themeToLight : t.themeToDark;
+  const onClick = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    toggleTheme({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+  };
+
   return (
     <button
-      onClick={toggleTheme}
+      onClick={onClick}
       className="themeBtn"
       style={small ? styles.themeBtnSmall : styles.themeBtn}
       aria-label={label}
@@ -1429,8 +1631,8 @@ function Chat({ session, onHome, onSignOut }) {
         </div>
       </aside>
 
-      <main style={styles.chatMain}>
-        <header style={styles.chatHead}>
+      <main style={styles.chatMain} className="chatMain">
+        <header style={styles.chatHead} className="chatHead">
           <div style={styles.chatHeadInner} className="chatPad">
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <button
