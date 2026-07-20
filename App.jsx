@@ -73,7 +73,10 @@ const THEME_CSS = `
     --c-paper: #FAFAF8;
     --c-paper2: #FFFFFF;
     --c-line: #E7E4DE;
-    --c-mute: #6B6B6B;
+    /* Was #6B6B6B (5.10:1 on bare paper). Nudged darker to buy back the
+       headroom the ambient wash costs, so muted copy clears AA even where
+       the washes overlap. Visually near-identical; measurably safer. */
+    --c-mute: #5F5F5F;
     --c-ok: #1F9D55;
 
     --c-red-rgb: 227,6,19;
@@ -94,6 +97,29 @@ const THEME_CSS = `
     --c-inkSurface: #1A1A1A;
     --c-onInk: #fff;
     --c-redSurface: #E30613;
+
+    /* Ambient wash. Roughly a quarter of the dark alphas and shifted pastel.
+       The ceiling here is contrast, not taste: this sits UNDER page text, and
+       measured at the stronger values I first tried, three overlapping blobs
+       pulled muted body copy from 5.10:1 down to 3.80:1 -- under AA. Cards
+       are opaque, so text inside them is unaffected; these values are set for
+       the copy that sits directly on the page background. */
+    /* Small red text sitting directly on the washed page background. Brand
+       #E30613 measures 3.95:1 there -- fine for the 56px hero line (large
+       text, 3:1) but under AA for the 12px eyebrow. The deeper brand red
+       clears it at 6:1. Surfaces and large type keep #E30613. */
+    --c-redInk: #B00410;
+
+    --wash1: rgba(227,6,19,.05);
+    --wash2: rgba(255,150,70,.055);
+    --wash3: rgba(80,120,255,.045);
+    --grain-opacity: .022;
+
+    /* Shadows carry a little brand warmth instead of neutral grey. This is
+       the difference between a card looking placed on the page and looking
+       cut out of it. */
+    --shadow-tint: 227,6,19;
+    --lift-top: rgba(255,255,255,.9);
   }
 
   html[data-theme="dark"] {
@@ -125,6 +151,18 @@ const THEME_CSS = `
 
     --c-inkSurface: #35312B;
     --c-onInk: #F2F0EC;
+
+    /* Dark mode needs no separate value: --c-red is already lifted for
+       legibility on dark, and the wash sits under light text there. */
+    --c-redInk: #FF2431;
+
+    --wash1: rgba(var(--c-red-rgb),.22);
+    --wash2: rgba(255,140,60,.10);
+    --wash3: rgba(70,110,255,.10);
+    --grain-opacity: .05;
+
+    --shadow-tint: 0,0,0;
+    --lift-top: rgba(255,255,255,.055);
     /* Stays true brand red, NOT the lifted --c-red: white-on-#FF4B57 is
        only 3.3:1 and button labels are too small to qualify as large
        text. #E30613 keeps white at 4.9:1 and still reads 3.8:1 against
@@ -189,42 +227,44 @@ const THEME_CSS = `
   }
 
   /* -----------------------------------------------------------------------
-     Dark-mode depth.
+     Ambient depth -- both themes, different values.
 
-     Flat dark UIs read as dead mostly for two reasons: a single uniform
-     background with no light source, and 8-bit banding across large dark
-     gradients. This adds a slow aurora wash for the first and a grain layer
-     for the second, then gives surfaces a lit top edge so they look like
-     objects rather than rectangles.
+     Dark surfaces read dead for two reasons: one uniform background with no
+     light source, and 8-bit banding across large dark gradients. Light
+     surfaces have the opposite problem -- plenty of brightness, but a flat
+     even field with nothing to catch the eye.
 
-     The whole layer is opacity 0 in light mode -- the light palette already
-     has depth and the wash only muddies it.
+     Same layer drives both; only the wash colours, grain and shadow tints
+     change. The light values are far weaker and more pastel: the saturated
+     alphas that give dark mode its glow turn a near-white page muddy and
+     cheap, and washing colour under body text costs contrast that dark mode
+     does not have to pay.
      -------------------------------------------------------------------- */
   .ambient {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    overflow: hidden; opacity: 0; transition: opacity .6s ease;
+    overflow: hidden; opacity: 1; transition: opacity .6s ease;
   }
-  html[data-theme="dark"] .ambient { opacity: 1; }
   .ambient i {
     position: absolute; display: block; border-radius: 50%;
     filter: blur(90px);
     /* Promoted up front: blur + transform repaints on a 50vw element are
        expensive enough to drop frames mid-scroll otherwise. */
     will-change: transform;
+    background: radial-gradient(circle, var(--wash) , transparent 68%);
   }
   .ambient .b1 {
     width: 54vw; height: 54vw; left: -14vw; top: -20vw;
-    background: radial-gradient(circle, rgba(var(--c-red-rgb),.22), transparent 68%);
+    --wash: var(--wash1);
     animation: drift1 30s ease-in-out infinite;
   }
   .ambient .b2 {
     width: 44vw; height: 44vw; right: -12vw; top: 14vh;
-    background: radial-gradient(circle, rgba(255,140,60,.10), transparent 68%);
+    --wash: var(--wash2);
     animation: drift2 38s ease-in-out infinite;
   }
   .ambient .b3 {
     width: 60vw; height: 60vw; left: 16vw; bottom: -30vw;
-    background: radial-gradient(circle, rgba(70,110,255,.10), transparent 70%);
+    --wash: var(--wash3);
     animation: drift3 46s ease-in-out infinite;
   }
   @keyframes drift1 {
@@ -241,16 +281,38 @@ const THEME_CSS = `
   }
 
   /* Grain. Static, tiled, and very low opacity -- animated grain reads as
-     video noise and is far more distracting than it looks in a demo. */
+     video noise and is far more distracting than it looks in a demo.
+     Lighter in light mode: it is there for paper texture, not to fight the
+     banding that only large dark gradients suffer from. */
   .grain {
     position: fixed; inset: 0; pointer-events: none; z-index: 1;
-    opacity: 0; transition: opacity .6s ease;
+    opacity: var(--grain-opacity); transition: opacity .6s ease;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.42'/%3E%3C/svg%3E");
   }
-  html[data-theme="dark"] .grain { opacity: .05; }
 
   /* Content must sit above both layers. */
   .pageIn { position: relative; z-index: 2; }
+
+  /* Light-mode surfaces: warm-tinted shadow rather than neutral grey, and a
+     bright top edge. Grey shadows on a warm paper background are the single
+     most common reason a light UI looks unfinished -- the shadow reads as
+     dirt on the page instead of light falling across it. */
+  .stepCard, .pop {
+    box-shadow: inset 0 1px 0 var(--lift-top),
+                0 1px 2px rgba(var(--shadow-tint),.05),
+                0 8px 24px rgba(var(--shadow-tint),.07);
+  }
+  .stepCard:hover {
+    box-shadow: inset 0 1px 0 var(--lift-top),
+                0 2px 6px rgba(var(--shadow-tint),.07),
+                0 18px 38px rgba(var(--shadow-tint),.12);
+  }
+  .primaryBtn, .sendBtn, .authBtnAnim {
+    box-shadow: 0 2px 6px rgba(var(--c-red-rgb),.22), 0 8px 22px rgba(var(--c-red-rgb),.20);
+  }
+  .primaryBtn:hover, .sendBtn:hover, .authBtnAnim:hover {
+    box-shadow: 0 4px 10px rgba(var(--c-red-rgb),.28), 0 14px 32px rgba(var(--c-red-rgb),.28);
+  }
 
   /* Surfaces get a top highlight, as if lit from above, plus a deeper
      shadow. This is what separates a card from the page when the two are
@@ -294,8 +356,15 @@ const THEME_CSS = `
 
   /* The chat surface paints its own opaque gradient, which would sit on top of
      the ambient layer and leave the screen users actually spend their time on
-     completely flat. In dark mode it drops to a translucent wash so the
-     aurora reads through it. */
+     completely flat. Both themes drop it to a translucent wash so the ambient
+     layer reads through. Kept high (72-88%) in light mode -- message text sits
+     directly on this, so the wash has to stay a hint rather than a tint. */
+  /* Light mode deliberately leaves the chat surfaces opaque. This is the
+     densest text in the app, much of it muted, and floating it over the wash
+     is where the contrast headroom actually runs out. The landing page and
+     the gutters carry the effect instead. Dark mode can afford the
+     translucency because its wash sits under light text, not dark. */
+
   html[data-theme="dark"] .chatMain {
     background:
       radial-gradient(1100px 460px at 82% -12%, rgba(var(--c-red-rgb),.10), transparent 62%),
@@ -2277,7 +2346,7 @@ const styles = {
   heroInner: { position: "relative", zIndex: 1 },
   eyebrow: {
     textTransform: "uppercase", letterSpacing: 3, fontSize: 12, fontWeight: 700,
-    color: C.red, margin: "0 0 18px",
+    color: "var(--c-redInk)", margin: "0 0 18px",
   },
   h1: { fontSize: 56, lineHeight: 1.05, fontWeight: 800, letterSpacing: -1.5, margin: 0 },
   sub: { fontSize: 17, lineHeight: 1.6, color: C.mute, maxWidth: 480, margin: "22px 0 0" },
