@@ -48,61 +48,26 @@ const C = {
 };
 
 // ---------------------------------------------------------------------------
-// Logo — recreated as inline SVG (crisp, animatable). The red arc is the
-// signature motif reused across the app.
+// Logo — the real Elsewedy Electric mark (public/logo.png, white background
+// removed so it drops cleanly onto any surface). `mono` inverts it to solid
+// white for dark/branded backgrounds; `animateArc` gives a soft reveal on the
+// auth splash. Props kept identical to the old inline-SVG version so every
+// call site works unchanged.
 // ---------------------------------------------------------------------------
 function Logo({ height = 34, mono = false, animateArc = false }) {
-  const text = mono ? "#fff" : C.ink;
   return (
-    <svg
-      viewBox="0 0 300 130"
+    <img
+      src="/logo.png"
+      alt="Elsewedy Electric"
       height={height}
-      role="img"
-      aria-label="Elsewedy Electric"
-      style={{ display: "block" }}
-    >
-      <text
-        x="150"
-        y="42"
-        textAnchor="middle"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontWeight="700"
-        fontSize="40"
-        letterSpacing="6"
-        fill={text}
-      >
-        ELSEWEDY
-      </text>
-      <rect x="8" y="55" width="284" height="4" fill={text} />
-      <text
-        x="150"
-        y="100"
-        textAnchor="middle"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontWeight="700"
-        fontSize="40"
-        letterSpacing="10"
-        fill={text}
-      >
-        ELECTRIC
-      </text>
-      <path
-        d="M70 120 Q150 150 230 120"
-        fill="none"
-        stroke={C.red}
-        strokeWidth="7"
-        strokeLinecap="round"
-        style={
-          animateArc
-            ? {
-                strokeDasharray: 220,
-                strokeDashoffset: 220,
-                animation: "drawArc 1s ease forwards 0.4s",
-              }
-            : undefined
-        }
-      />
-    </svg>
+      style={{
+        height,
+        width: "auto",
+        display: "block",
+        filter: mono ? "brightness(0) invert(1)" : "none",
+        animation: animateArc ? "logoReveal 0.7s ease forwards" : undefined,
+      }}
+    />
   );
 }
 
@@ -894,6 +859,10 @@ function GlobalStyle() {
       a { text-decoration: none; }
 
       @keyframes drawArc { to { stroke-dashoffset: 0; } }
+      @keyframes logoReveal {
+        from { opacity: 0; transform: translateY(8px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+      }
       @keyframes riseUp {
         from { opacity: 0; transform: translateY(16px); }
         to   { opacity: 1; transform: translateY(0); }
