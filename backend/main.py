@@ -30,10 +30,13 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent / ".env")
 
+import logging
 import random
+import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session, select
@@ -48,12 +51,32 @@ from backend.db import User, get_session, init_db
 from backend.email_utils import email_mode, send_code
 from backend.embedding_map import EmbeddingMap
 from backend.llm import generate_reply, translate_to_english
+from backend.security import (
+    check_lockout,
+    rate_limit,
+    record_failed_login,
+    reset_failed_login,
+)
+
+logger = logging.getLogger("supportbot")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
 
 # rag package (your existing Day-1/Day-2 code) -------------------------------
 from rag.config import load_config
 from rag.retrieve import semantic_search, hybrid_search, detect_product_query
 
-app = FastAPI(title="SupportBot API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown hook (modern replacement for @app.on_event)."""
+    init_db()
+    logger.info("SupportBot API ready. email mode = %s", email_mode())
+    yield
+
+
+app = FastAPI(title="SupportBot API", lifespan=lifespan)
 
 # CORS: allow the frontend dev server to call us. Tighten allow_origins to your
 # real frontend URL in production instead of localhost.
@@ -68,6 +91,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Structured access log: method, path, status, latency. One line per
+    request -- the basis for any later observability (latency percentiles,
+    error rates) without pulling in a metrics stack for a demo."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "%s %s -> %s (%.0fms)",
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+    )
+    return response
+
 
 _SETTINGS = load_config()
 _CODE_TTL_MIN = 10
@@ -84,16 +126,10 @@ def _get_embedding_map() -> EmbeddingMap:
     return _embedding_map
 
 
-# Ensure tables exist as soon as the module is imported. The startup event
-# below also calls this; running it here too makes the app robust regardless
-# of how it's launched (uvicorn, TestClient, embedded, etc.).
+# Ensure tables exist as soon as the module is imported. The lifespan handler
+# also calls this; running it here too makes the app robust regardless of how
+# it's launched (uvicorn, TestClient, embedded, etc.).
 init_db()
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    init_db()
-    print(f"[startup] SupportBot API ready. email mode = {email_mode()}")
 
 
 def _gen_code() -> str:
@@ -123,8 +159,9 @@ class Hit(BaseModel):
 
 
 @app.post("/search", response_model=list[Hit])
-def search(req: SearchRequest) -> list[dict]:
+def search(req: SearchRequest, request: Request) -> list[dict]:
     """Real semantic search over the indexed corpus. No LLM involved."""
+    rate_limit(request, "search", max_requests=60, window_seconds=60)
     q = req.query.strip()
     if not q:
         raise HTTPException(status_code=400, detail="Query must not be empty.")
@@ -183,10 +220,11 @@ def _fallback_reply(hits: list[dict]) -> str:
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> dict:
+def chat(req: ChatRequest, request: Request) -> dict:
     """Real RAG: retrieve cases, then have Gemini write a short grounded
     reply from them. Falls back to a plain message (never crashes the chat)
     if Gemini is unavailable -- no API key set, rate limited, network down."""
+    rate_limit(request, "chat", max_requests=30, window_seconds=60)
     q = req.query.strip()
     if not q:
         raise HTTPException(status_code=400, detail="Message must not be empty.")
@@ -259,12 +297,13 @@ class EmbeddingMapResponse(BaseModel):
 
 
 @app.post("/embedding_map", response_model=EmbeddingMapResponse)
-def embedding_map(req: EmbeddingMapRequest) -> dict:
+def embedding_map(req: EmbeddingMapRequest, request: Request) -> dict:
     """The 'science made visible' endpoint: projects the real 384-dim
     corpus vectors (and this query's own real vector) into a shared 2D
     space via PCA, so semantic search can be SHOWN as geometry, not just
     described. See backend/embedding_map.py for the honest explanation of
     what this plot does and doesn't prove."""
+    rate_limit(request, "embedding_map", max_requests=60, window_seconds=60)
     q = req.query.strip()
     if not q:
         raise HTTPException(status_code=400, detail="Query must not be empty.")
@@ -331,7 +370,8 @@ def _get_user(session: Session, email: str) -> User | None:
 
 
 @app.post("/auth/signup")
-def signup(req: SignupRequest, session: Session = Depends(get_session)) -> dict:
+def signup(req: SignupRequest, request: Request, session: Session = Depends(get_session)) -> dict:
+    rate_limit(request, "signup", max_requests=5, window_seconds=60)
     if len(req.username.strip()) < 2:
         raise HTTPException(400, "Username must be at least 2 characters.")
     if len(req.password) < 6:
@@ -371,7 +411,8 @@ def signup(req: SignupRequest, session: Session = Depends(get_session)) -> dict:
 
 
 @app.post("/auth/verify", response_model=AuthResponse)
-def verify(req: VerifyRequest, session: Session = Depends(get_session)) -> dict:
+def verify(req: VerifyRequest, request: Request, session: Session = Depends(get_session)) -> dict:
+    rate_limit(request, "verify", max_requests=10, window_seconds=60)
     user = _get_user(session, req.email)
     if not user or user.pending_kind != "verify":
         raise HTTPException(400, "No pending verification for that email.")
@@ -391,17 +432,24 @@ def verify(req: VerifyRequest, session: Session = Depends(get_session)) -> dict:
 
 
 @app.post("/auth/login", response_model=AuthResponse)
-def login(req: LoginRequest, session: Session = Depends(get_session)) -> dict:
+def login(req: LoginRequest, request: Request, session: Session = Depends(get_session)) -> dict:
+    rate_limit(request, "login", max_requests=10, window_seconds=60)
+    # Lockout is keyed on the account, so it throttles a password guess even if
+    # the attacker rotates IPs (which would slip past the per-IP rate limit).
+    check_lockout(req.email)
     user = _get_user(session, req.email)
     if not user or not verify_password(req.password, user.password_hash):
+        record_failed_login(req.email)
         raise HTTPException(401, "Incorrect email or password.")
     if not user.is_verified:
         raise HTTPException(403, "Email not verified. Check your inbox for the code.")
+    reset_failed_login(req.email)
     return {"token": create_token(user.email), "username": user.username, "email": user.email}
 
 
 @app.post("/auth/forgot")
-def forgot(req: ForgotRequest, session: Session = Depends(get_session)) -> dict:
+def forgot(req: ForgotRequest, request: Request, session: Session = Depends(get_session)) -> dict:
+    rate_limit(request, "forgot", max_requests=5, window_seconds=60)
     user = _get_user(session, req.email)
     # Do not reveal whether the account exists (avoids account enumeration),
     # but for a teaching demo we return a clear message. In prod, always 200.
@@ -418,7 +466,8 @@ def forgot(req: ForgotRequest, session: Session = Depends(get_session)) -> dict:
 
 
 @app.post("/auth/reset")
-def reset(req: ResetRequest, session: Session = Depends(get_session)) -> dict:
+def reset(req: ResetRequest, request: Request, session: Session = Depends(get_session)) -> dict:
+    rate_limit(request, "reset", max_requests=10, window_seconds=60)
     user = _get_user(session, req.email)
     if not user or user.pending_kind != "reset":
         raise HTTPException(400, "No pending reset for that email.")

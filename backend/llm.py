@@ -4,13 +4,61 @@ backend.llm -- Gemini-generated replies, grounded in retrieved cases.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import time
+from collections import OrderedDict
 
 from google import genai
 from google.genai import types
 
 MODEL = "gemini-2.5-flash"
+
+# --- caching + retry --------------------------------------------------------
+# The free Gemini tier is tightly rate limited, so we (a) cache successful
+# replies and translations by their exact inputs, and (b) retry only transient
+# failures. Identical questions then cost zero API calls, and a brief network
+# blip doesn't fall straight through to the offline fallback.
+_REPLY_CACHE: "OrderedDict[str, str]" = OrderedDict()
+_TRANSLATION_CACHE: "OrderedDict[str, str]" = OrderedDict()
+_CACHE_MAX = 256
+
+
+def _cache_get(cache: "OrderedDict[str, str]", key: str) -> str | None:
+    if key in cache:
+        cache.move_to_end(key)  # LRU: mark as recently used
+        return cache[key]
+    return None
+
+
+def _cache_put(cache: "OrderedDict[str, str]", key: str, value: str) -> None:
+    cache[key] = value
+    cache.move_to_end(key)
+    while len(cache) > _CACHE_MAX:
+        cache.popitem(last=False)  # evict least-recently-used
+
+
+def _is_permanent_quota_error(exc: Exception) -> bool:
+    """A daily-quota 429 won't clear on a short retry, so we fail fast to the
+    offline fallback instead of stalling the request retrying it."""
+    text = str(exc).upper()
+    return "429" in text or "RESOURCE_EXHAUSTED" in text or "QUOTA" in text
+
+
+def _generate_with_retry(client: "genai.Client", **kwargs):
+    """Call Gemini, retrying only transient errors (network/5xx) up to twice
+    with a short backoff. Quota errors and empty results are not retried."""
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            return client.models.generate_content(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if _is_permanent_quota_error(exc) or attempt == 2:
+                raise
+            time.sleep(0.5 * (attempt + 1))  # 0.5s, 1.0s
+    raise last_exc  # unreachable, but keeps type checkers happy
 # Enough headroom for a full 5-case Problem/Resolution listing. Arabic replies
 # spend noticeably more tokens on the same content, and a truncated answer
 # would cut off mid-resolution.
@@ -29,13 +77,18 @@ def translate_to_english(query: str) -> str:
     if not needs_translation(query):
         return query
 
+    cached = _cache_get(_TRANSLATION_CACHE, query)
+    if cached is not None:
+        return cached
+
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key:
         return query
 
     try:
         client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
+        response = _generate_with_retry(
+            client,
             model=MODEL,
             contents=query,
             config=types.GenerateContentConfig(
@@ -48,9 +101,12 @@ def translate_to_english(query: str) -> str:
                 thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
-        return (response.text or "").strip() or query
+        result = (response.text or "").strip() or query
     except Exception:
         return query
+
+    _cache_put(_TRANSLATION_CACHE, query, result)
+    return result
 
 
 _SYSTEM_PROMPT = """You are SupportBot, a technical support assistant.
@@ -199,8 +255,6 @@ def generate_reply(
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in backend/.env")
 
-    client = genai.Client(api_key=api_key)
-
     if product_summary is not None:
         context = _format_product_summary(product_summary)
         mode_rule = _PRODUCT_SUMMARY_RULE
@@ -211,10 +265,20 @@ def generate_reply(
     system_instruction = (
         _SYSTEM_PROMPT + mode_rule + (_GREETING_RULE if greet else _NO_GREETING_RULE)
     )
+    user_content = f"User message: {query}\n\nRetrieved cases:\n{context}"
 
-    response = client.models.generate_content(
+    # Cache on everything that shapes the answer, so an identical repeat costs
+    # no API call (and stays stable across the free tier's rate limits).
+    cache_key = json.dumps([system_instruction, user_content], sort_keys=True)
+    cached = _cache_get(_REPLY_CACHE, cache_key)
+    if cached is not None:
+        return cached
+
+    client = genai.Client(api_key=api_key)
+    response = _generate_with_retry(
+        client,
         model=MODEL,
-        contents=f"User message: {query}\n\nRetrieved cases:\n{context}",
+        contents=user_content,
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
             max_output_tokens=MAX_OUTPUT_TOKENS,
@@ -226,4 +290,5 @@ def generate_reply(
     text = (response.text or "").strip()
     if not text:
         raise RuntimeError("Gemini returned an empty response")
+    _cache_put(_REPLY_CACHE, cache_key, text)
     return text

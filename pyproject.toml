@@ -26,6 +26,12 @@ ui = ["streamlit>=1.37"]
 [dependency-groups]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 
+[tool.pytest.ini_options]
+# Put the repo root on sys.path so tests can import the `backend` package
+# (the `rag` package is already importable as an installed src-layout package).
+pythonpath = ["."]
+testpaths = ["tests"]
+
 [tool.ruff]
 line-length = 100
 
