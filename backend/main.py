@@ -155,6 +155,33 @@ class ChatResponse(BaseModel):
 GOOD_MATCH_MAX_DISTANCE = 0.65
 
 
+def _fallback_reply(hits: list[dict]) -> str:
+    """A deterministic, LLM-free reply for when Gemini is unavailable (no key,
+    network down, or free-tier quota exhausted).
+
+    We never surface the internal "couldn't reach the service" error to the
+    user. If retrieval found close cases, list them directly (same Case ID /
+    Problem / Resolution shape the model would produce) so the bot still
+    answers. If nothing close was found -- which is also what a greeting or
+    off-topic message looks like to retrieval -- give a warm nudge toward a
+    product question instead of an error.
+    """
+    grounding = [h for h in hits if h["distance"] <= GOOD_MATCH_MAX_DISTANCE]
+    if not grounding:
+        return (
+            "I'm here to help with product support. Tell me the device and what's "
+            "happening, and I'll find the matching past case and its resolution."
+        )
+
+    lines = ["Here are the problems and resolutions I found in past cases:", ""]
+    for h in grounding[:3]:  # cap so the reply stays an answer, not a dump
+        lines.append(f"Case ID: {h['case_id']}")
+        lines.append(f"Problem: {h['problem']}")
+        lines.append(f"Resolution: {h['resolution']}")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest) -> dict:
     """Real RAG: retrieve cases, then have Gemini write a short grounded
@@ -210,11 +237,7 @@ def chat(req: ChatRequest) -> dict:
         return {"reply": reply, "hits": hits, "grounded": True}
     except Exception as exc:  # noqa: BLE001 -- deliberately broad: never crash chat
         print(f"[chat] Gemini unavailable, falling back to retrieval-only: {exc}")
-        if grounding_hits:
-            fallback = "I couldn't reach the answer-writing service, but here's what I found in the case base:"
-        else:
-            fallback = "I couldn't reach the answer-writing service, and no close matches were found in the case base."
-        return {"reply": fallback, "hits": hits, "grounded": False}
+        return {"reply": _fallback_reply(hits), "hits": hits, "grounded": False}
 
 
 class EmbeddingMapRequest(BaseModel):
