@@ -90,14 +90,26 @@ whether continued extension or consolidating/presenting what exists is the bette
 - ~~Rate limiting / account lockout~~ — DONE (`security.py`).
 - ~~Persisted backend pytest suite~~ — DONE (`tests/test_backend.py`, + CI).
 - ~~Thumbs-up/down feedback~~ — DONE (`/feedback`, `Feedback` table, UI control).
+- ~~Backend error messages English-only in Arabic mode~~ — DONE (frontend error map + Arabic fallback text).
+- ~~Retrieval query contextualization~~ — DONE (`_contextualize` in `main.py`): a referring-word follow-up
+  now folds in the previous question before searching; self-contained queries are untouched.
+- ~~Mobile: sidebar was `display:none` under 900px~~ — DONE (direction-aware slide-in drawer + hamburger).
+- ~~Session lost on refresh~~ — DONE (session + language persisted to localStorage).
+
+## UI polish pass (frontend)
+
+- Chat empty-state (brand-arc watermark + hint), warmer layered background, two-layer shadows on
+  bubbles/cards, hover lift, unified ghost-button answer toolbar (copy + 👍/👎).
+- Keyboard `:focus-visible` rings across buttons/links (the app previously had no visible focus state
+  outside inputs), branded `::selection`.
+- Fixed: the opening welcome bubble stayed in the old language after toggling EN/AR.
 
 ## What's still NOT built
 
 - **Admin case-management UI + re-index endpoint** — the biggest remaining feature. Adding/editing cases is
   still done by hand in `support_cases.csv` + `uv run python -m rag.ingest && ... rag.index`.
-- **Query contextualization for retrieval** — conversation memory currently feeds the *LLM* prior turns, but
-  retrieval still runs on the raw current query, so a bare-pronoun follow-up ("and it still fails") may not
-  retrieve the right cases without the product/symptom words. A history-aware query rewrite would close this.
+- **Dark mode** — deliberately deferred: the palette is spread across inline styles plus many hardcoded
+  colours/gradients, so it needs visual iteration to avoid shipping a half-themed UI.
 - Voice input.
 - Minor Arabic edges: the landing-page mock-chat preview and the (English-only) example-query chips stay
   English by design; in the *offline* fallback the case Problem/Resolution text stays English (the live
