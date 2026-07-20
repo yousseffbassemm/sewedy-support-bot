@@ -98,8 +98,11 @@ whether continued extension or consolidating/presenting what exists is the bette
 - **Query contextualization for retrieval** — conversation memory currently feeds the *LLM* prior turns, but
   retrieval still runs on the raw current query, so a bare-pronoun follow-up ("and it still fails") may not
   retrieve the right cases without the product/symptom words. A history-aware query rewrite would close this.
-- Translation of backend-returned error messages (still English-only even in Arabic mode).
 - Voice input.
+- Minor Arabic edges: the landing-page mock-chat preview and the (English-only) example-query chips stay
+  English by design; in the *offline* fallback the case Problem/Resolution text stays English (the live
+  Gemini path translates it). Backend error messages, the fallback bot text, and all UI chrome ARE now
+  Arabic.
 - Frontend Docker + full-stack `compose` (backend is containerized; `supportbot-ui` is not, since it lives
   outside this repo).
 
