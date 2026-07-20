@@ -388,14 +388,56 @@ const CASE_COUNT = 66;
 // ===========================================================================
 // Root
 // ===========================================================================
+// Persisted UI state. Wrapped in try/catch because localStorage throws in
+// private-browsing / blocked-cookie contexts — there we simply fall back to
+// in-memory state rather than breaking the app.
+const SESSION_KEY = "supportbot.session";
+const LANG_KEY = "supportbot.lang";
+
+function readStored(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStored(key, value) {
+  try {
+    if (value === null || value === undefined) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage unavailable — degrade to in-memory only */
+  }
+}
+
 export default function App() {
   const [route, setRoute] = useState("landing"); // landing | auth | app
-  const [session, setSession] = useState(null); // {username, email, token}
-  const [lang, setLang] = useState("en"); // en | ar
+  // Restored from storage so a refresh doesn't sign the user out (the JWT is
+  // valid for a week; an expired one simply fails the next API call).
+  const [session, setSession] = useState(() => readStored(SESSION_KEY, null));
+  const [lang, setLang] = useState(() => (readStored(LANG_KEY, "en") === "ar" ? "ar" : "en"));
 
   const dir = lang === "ar" ? "rtl" : "ltr";
   const t = TRANSLATIONS[lang];
-  const toggleLang = () => setLang((l) => (l === "en" ? "ar" : "en"));
+  const toggleLang = () =>
+    setLang((l) => {
+      const next = l === "en" ? "ar" : "en";
+      writeStored(LANG_KEY, next);
+      return next;
+    });
+
+  const signIn = (user) => {
+    setSession(user);
+    writeStored(SESSION_KEY, user);
+    setRoute("app");
+  };
+  const signOut = () => {
+    setSession(null);
+    writeStored(SESSION_KEY, null);
+    setRoute("landing");
+  };
 
   return (
     <LangContext.Provider value={{ lang, t, dir, toggleLang }}>
@@ -405,24 +447,9 @@ export default function App() {
           {route === "landing" && (
             <Landing session={session} onStart={() => setRoute(session ? "app" : "auth")} />
           )}
-          {route === "auth" && (
-            <Auth
-              onAuthed={(u) => {
-                setSession(u);
-                setRoute("app");
-              }}
-              onHome={() => setRoute("landing")}
-            />
-          )}
+          {route === "auth" && <Auth onAuthed={signIn} onHome={() => setRoute("landing")} />}
           {route === "app" && (
-            <Chat
-              session={session}
-              onHome={() => setRoute("landing")}
-              onSignOut={() => {
-                setSession(null);
-                setRoute("landing");
-              }}
-            />
+            <Chat session={session} onHome={() => setRoute("landing")} onSignOut={signOut} />
           )}
         </div>
       </div>
