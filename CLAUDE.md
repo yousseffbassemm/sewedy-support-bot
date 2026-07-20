@@ -23,26 +23,30 @@ whether continued extension or consolidating/presenting what exists is the bette
 ## Key numbers (current corpus)
 
 - Raw CSV: 69 rows
-- Clean (searchable): 57 → `data/cases_clean.jsonl`
-- Review queue (no resolution, excluded from search): 12 → `data/review_queue.jsonl`
+- Clean (searchable): 66 → `data/cases_clean.jsonl`
+- Review queue (excluded from search): 3 → `data/review_queue.jsonl` — the 3 remaining rows
+  are genuinely unresolvable (no cause, vague one-line problem like "Customer unhappy with the
+  unit"); they are the quality gate working as intended, not a gap to fill.
 - Duplicates found: 0
 - Embedding provider: `local` (MiniLM, `all-MiniLM-L6-v2`), 384-dim
 - Vector store: ChromaDB, persistent, `data/chroma/`, collection `support_cases`
 - Answer generation: Gemini (`gemini-2.5-flash`), thinking disabled, grounding threshold 0.65 cosine distance
-- Tests: 10/10 passing (`tests/test_ingest.py`)
+- Tests: 35/35 passing (`tests/test_ingest.py` + `tests/test_retrieve.py`)
+- Retriever eval (`eval_set_public.json`, 15 queries): hybrid engine 100% Hit@1 on identifier
+  and paraphrase queries, 100% out-of-domain rejection, MRR@5 = 1.000.
 
 ## Known data-quality findings (from real testing, not code bugs)
 
-- **"Configuration resets after power cycle"** — 5 tickets across 5 different products (PowerTrack P1,
-  GridLink Hub ×2, ThermoNode T5, FlowMeter X100), **zero have a logged resolution**. Correctly excluded from
-  the searchable index by the `no_resolution` gate — but this means the system genuinely cannot answer this
-  exact, common-sounding complaint correctly. If a real-world fix exists, add it to `support_cases.csv` and
-  re-index.
-- **"Wrong serial number"** — 3 tickets (FlowMeter X100, AeroSense G3 ×2), same situation: zero resolutions.
-- Minor: a few rows have inconsistent product-name casing (`aerosense g3`, `FLOWMETER x100` instead of proper
-  case) — cosmetic, worth a data-cleanup pass.
-- The landing page's product-coverage chips and the chat sidebar's example-question suggestions were updated
-  to avoid the two gaps above (they used to point at unresolvable questions).
+- **RESOLVED — "Configuration resets after power cycle"** (5 tickets: PowerTrack P1, GridLink Hub ×2,
+  ThermoNode T5, FlowMeter X100) and **"Wrong serial number"** (3 tickets: FlowMeter X100, AeroSense G3 ×2)
+  and **"Hub drops its devices after a reboot"** (1 ticket, GridLink Hub) had no logged resolution and were
+  held out of the index. Each had a clear logged *cause*, so a matching resolution was added to
+  `support_cases.csv` and the corpus was re-ingested/re-indexed. All 9 are now searchable and retrieve
+  grounded answers (verified: distances 0.26–0.35). Searchable corpus went 57 → 66; review queue 12 → 3.
+- Product-name casing (`aerosense g3`, `FLOWMETER x100`) is **already normalised at ingest** by the
+  majority-vote canonicaliser in `ingest.py` — the clean corpus shows the canonical spelling; not a gap.
+- The 3 rows still in the review queue (`8820-7750`, `8821-7751`, `8822-7752`) have no cause and a vague
+  one-line problem; there is nothing specific to resolve, so they stay gated by design.
 
 ## Decisions log
 
@@ -59,6 +63,12 @@ whether continued extension or consolidating/presenting what exists is the bette
 - Added **query translation before retrieval** for non-English input, since the embedder is English-only and
   was producing near-random retrieval for Arabic queries — see `DESIGN.md` §13.
 - Embedding-space visualization uses raw numpy SVD, not scikit-learn — one fewer dependency, transparent math.
+- **BM25 stopword filtering** (`_tokenize_bm25` in `retrieve.py`): the keyword half now drops English
+  function words and the domain-generic subject nouns "device"/"unit" before scoring. These appear in nearly
+  every case, and because BM25 rewards them like any token, a shared filler word could cast a spurious keyword
+  vote in RRF. This fixed a real fusion regression — "the device is completely dead and won't power up" used
+  to retrieve a *no-display* case over the correct *does-not-power-on* one. Semantic search and the product-name
+  detector still use the original `_tokenize`, so the G2-vs-G3 model-number disambiguation is untouched.
 
 ## What's intentionally NOT built
 

@@ -793,7 +793,8 @@ function Message({ m }) {
     return (
       <div style={styles.rowLeft}>
         <div style={styles.botBubble} className="pop">
-          {m.text}
+          {/* This splits the text at " / " and replaces it with a real newline */}
+          {m.text.split(" / ").join("\n")}
         </div>
       </div>
     );

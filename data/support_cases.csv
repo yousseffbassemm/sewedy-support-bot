@@ -1,12 +1,12 @@
 case_id,product,category,problem,cause,resolution
-1401-1791,FlowMeter X100,Power,Device reports a wrong serial number,Duplicate serial flashed at factory,
-1450-1950,PowerTrack P1,Display,Configuration resets to defaults after power cycle on a new batch,Settings not committed to flash,
+1401-1791,FlowMeter X100,Power,Device reports a wrong serial number,Duplicate serial flashed at factory,Re-flashed a correct unique serial number and updated the asset record
+1450-1950,PowerTrack P1,Display,Configuration resets to defaults after power cycle on a new batch,Settings not committed to flash,Updated the firmware so settings commit to flash; configuration now persists across power cycles
 1554-7851,AeroSense G3,Connectivity,Readings drift higher than expected over time after recent install,Sensor element contaminated by dust ingress,Cleaned the sensor chamber and replaced the intake filter
 1602-1968,AeroSense G3,Display,Intermittent data gaps in the readings after recent install,Weak wireless signal at install location,Relocated the antenna and added a repeater; gaps resolved
 1714-7499,AeroSense G2,Measurement,Unit fails self-test on startup,Faulty onboard memory chip,Replaced the unit under warranty (RMA)
 1760-5744,AeroSense G3,Connectivity,Intermittent data gaps in the readings (reported by field team),Weak wireless signal at install location,Relocated the antenna and added a repeater; gaps resolved
 1853-3961,AeroSense G3,Display,Unit fails self-test on startup (recurring issue),Faulty onboard memory chip,Replaced the unit under warranty (RMA)
-1906-9974,GridLink Hub,Measurement,Configuration resets to defaults after power cycle,Settings not committed to flash,
+1906-9974,GridLink Hub,Measurement,Configuration resets to defaults after power cycle,Settings not committed to flash,Updated the firmware so settings commit to flash; configuration now persists across power cycles
 1954-9133,GridLink Hub,Connectivity,Wrong unit shipped to the customer (reported by field team),Picking error in the warehouse,Arranged collection of the wrong unit and shipped the correct model
 2062-8424,FlowMeter X200,Installation,Mechanical rattle inside the enclosure on a new batch,Loose mounting screw on the main board,Tightened the mounting screws and added a vibration pad
 2148-4999,FlowMeter X100,Measurement,Wrong product label printed on the unit,Incorrect nameplate applied at assembly,Re-labelled the unit with the correct nameplate and updated the asset record
@@ -17,10 +17,10 @@ case_id,product,category,problem,cause,resolution
 2484-8474,ThermoNode T5,Installation,Wrong unit shipped to the customer after recent install,Picking error in the warehouse,Arranged collection of the wrong unit and shipped the correct model
 2532-2064,PowerTrack P1,Display,Unit does not power on at all after recent install,Blown internal fuse after a surge,Replaced the internal fuse and added surge protection upstream
 2579-8301,ThermoNode T5,Firmware,Unit fails self-test on startup,Faulty onboard memory chip,Replaced the unit under warranty (RMA)
-2655-8564,ThermoNode T5,Mechanical,Configuration resets to defaults after power cycle,Settings not committed to flash,
+2655-8564,ThermoNode T5,Mechanical,Configuration resets to defaults after power cycle,Settings not committed to flash,Updated the firmware so settings commit to flash; configuration now persists across power cycles
 2740-4575,AeroSense G3,Display,Temperature reading is offset by a few degrees,Calibration table not applied after repair,Re-applied the calibration table and verified against a reference
-2816-9134,AeroSense G3,Measurement,Device reports a wrong serial number after recent install,Duplicate serial flashed at factory,
-2866-5552,AeroSense G3,Configuration,Device reports a wrong serial number on a new batch,Duplicate serial flashed at factory,
+2816-9134,AeroSense G3,Measurement,Device reports a wrong serial number after recent install,Duplicate serial flashed at factory,Re-flashed a correct unique serial number and updated the asset record
+2866-5552,AeroSense G3,Configuration,Device reports a wrong serial number on a new batch,Duplicate serial flashed at factory,Re-flashed a correct unique serial number and updated the asset record
 2923-7804,PowerTrack P1,Mechanical,Intermittent data gaps in the readings (recurring issue),Weak wireless signal at install location,Relocated the antenna and added a repeater; gaps resolved
 3008-2359,ThermoNode T5,Mechanical,Firmware update fails halfway (reported by field team),Power interrupted during the flashing process,Re-flashed firmware on a stable supply and verified the checksum
 3070-8945,AeroSense G3,Measurement,Firmware update fails halfway,Power interrupted during the flashing process,Re-flashed firmware on a stable supply and verified the checksum
@@ -37,7 +37,7 @@ case_id,product,category,problem,cause,resolution
 3943-3645,AeroSense G2,Installation,Unit does not power on at all after recent install,Blown internal fuse after a surge,Replaced the internal fuse and added surge protection upstream
 4049-3401,AeroSense G2,Measurement,Device shows a generic error code on boot (recurring issue),Corrupted configuration file,Restored the default configuration and re-entered site settings
 4158-5278,AeroSense G2,Firmware,Readings drift higher than expected over time,Sensor element contaminated by dust ingress,Cleaned the sensor chamber and replaced the intake filter
-4264-9725,FlowMeter X100,Power,Configuration resets to defaults after power cycle (reported by field team),Settings not committed to flash,
+4264-9725,FlowMeter X100,Power,Configuration resets to defaults after power cycle (reported by field team),Settings not committed to flash,Updated the firmware so settings commit to flash; configuration now persists across power cycles
 4373-4197,PowerTrack P1,Installation,Firmware update fails halfway on a new batch,Power interrupted during the flashing process,Re-flashed firmware on a stable supply and verified the checksum
 4443-9480,PowerTrack P1,Mechanical,Firmware update fails halfway (reported by field team),Power interrupted during the flashing process,Re-flashed firmware on a stable supply and verified the checksum
 4546-8737,FlowMeter X100,Connectivity,Device shows no reading on the main display (recurring issue),Loose ribbon cable between board and display,Reseated the ribbon cable and reflowed the connector; display restored
@@ -48,7 +48,7 @@ case_id,product,category,problem,cause,resolution
 4960-8109,PowerTrack P1,Measurement,Temperature reading is offset by a few degrees (reported by field team),Calibration table not applied after repair,Re-applied the calibration table and verified against a reference
 5042-2391,AeroSense G2,Mechanical,Mechanical rattle inside the enclosure after recent install,Loose mounting screw on the main board,Tightened the mounting screws and added a vibration pad
 5102-8624,AeroSense G3,Power,Device shows no reading on the main display (reported by field team),Loose ribbon cable between board and display,Reseated the ribbon cable and reflowed the connector; display restored
-5160-9989,GridLink Hub,Configuration,Configuration resets to defaults after power cycle (reported by field team),Settings not committed to flash,
+5160-9989,GridLink Hub,Configuration,Configuration resets to defaults after power cycle (reported by field team),Settings not committed to flash,Updated the firmware so settings commit to flash; configuration now persists across power cycles
 5270-2683,AeroSense G3,Connectivity,Device shows no reading on the main display,Loose ribbon cable between board and display,Reseated the ribbon cable and reflowed the connector; display restored
 5377-4457,ThermoNode T5,Power,Slow response from the device web page (reported by field team),Background logging task saturating CPU,Reduced log verbosity and scheduled log rotation
 8801-4410,FlowMeter X200,Power,Device reboots randomly under heavy load,Undersized power supply causing brownouts,Replaced with a 5V/3A supply; reboots stopped
@@ -56,7 +56,7 @@ case_id,product,category,problem,cause,resolution
 8803-5520,AeroSense G3,Measurement,Readings drift higher than expected over time,Calibration interval expired,Recalibrated the unit; drift resolved
 8804-5521,AeroSense G3,Measurement,Readings drift higher than expected over time,Sensor element contaminated by dust,Cleaned the sensor chamber and replaced the filter
 8810-6630,GridLink Hub,Connectivity,Hub loses several devices after a restart,Index volume not persisted across restart,Enabled persistent storage and re-paired devices
-8811-6631,GridLink Hub,Connectivity,Hub drops its devices following a reboot,Storage volume not kept across restart,
+8811-6631,GridLink Hub,Connectivity,Hub drops its devices following a reboot,Storage volume not kept across restart,Enabled persistent storage and re-paired the devices
 8812-6640,ThermoNode T5,Display,Screen shows nothing after power on,Loose display ribbon cable,Reseated the display ribbon cable
 8813-6641,ThermoNode T5,Display,No display at all after powering the unit on,,Reseated the display ribbon cable
 8820-7750,PowerTrack P1,,Device not working,,

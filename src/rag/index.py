@@ -82,8 +82,17 @@ def index_corpus(settings: Settings, batch_size: int = 32) -> int:
             ids=[c["case_id"] for c in batch],
             embeddings=vectors,
             documents=texts,
+            # `cause` and `resolution` are stored so retrieval can hand the
+            # answer writer the resolution as its own field. Without them the
+            # only way to recover a fix is to re-parse it out of `text`.
             metadatas=[
-                {"product": c["product"], "category": c["category"], "problem": c["problem"]}
+                {
+                    "product": c["product"],
+                    "category": c["category"],
+                    "problem": c["problem"],
+                    "cause": c["cause"],
+                    "resolution": c["resolution"],
+                }
                 for c in batch
             ],
         )

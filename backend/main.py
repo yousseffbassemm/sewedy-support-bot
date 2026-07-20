@@ -51,7 +51,7 @@ from backend.llm import generate_reply, translate_to_english
 
 # rag package (your existing Day-1/Day-2 code) -------------------------------
 from rag.config import load_config
-from rag.retrieve import semantic_search
+from rag.retrieve import semantic_search, hybrid_search, detect_product_query
 
 app = FastAPI(title="SupportBot API")
 
@@ -128,12 +128,16 @@ def search(req: SearchRequest) -> list[dict]:
     q = req.query.strip()
     if not q:
         raise HTTPException(status_code=400, detail="Query must not be empty.")
-    hits = semantic_search(q, _SETTINGS, top_k=req.top_k)
+    hits = hybrid_search(q, _SETTINGS, top_k=req.top_k)
     return hits
 
 
 class ChatRequest(BaseModel):
     query: str
+    # True only for the first question in a chat, so the reply opens with a
+    # greeting once instead of on every message. Defaults False so any caller
+    # that omits it (older frontend, direct API use) simply never greets.
+    first: bool = False
 
 
 class ChatResponse(BaseModel):
@@ -166,7 +170,32 @@ def chat(req: ChatRequest) -> dict:
     # query (q) still goes to generate_reply so Gemini replies in the
     # user's own language; only retrieval uses the English version.
     search_query = translate_to_english(q)
-    hits = semantic_search(search_query, _SETTINGS, top_k=5)
+
+    # A bare product name ("AeroSense G2") is a browse, not a problem: answer it
+    # with a count + one example + a prompt for the real symptom, instead of
+    # dumping every case. The count comes from the whole corpus, not the top-k,
+    # so "12 cases" is the true total. A query that also carries a symptom
+    # ("AeroSense G2 screen is blank") returns None here and falls through to
+    # normal retrieval below.
+    product_summary = detect_product_query(search_query, _SETTINGS)
+    if product_summary is not None:
+        try:
+            reply = generate_reply(q, [], greet=req.first, product_summary=product_summary)
+            return {"reply": reply, "hits": [], "grounded": True}
+        except Exception as exc:  # noqa: BLE001 -- never crash chat
+            print(f"[chat] Gemini unavailable for product summary: {exc}")
+            example = product_summary["example_problem"]
+            example_line = (
+                f" For example, one of the cases is: {example}." if example else ""
+            )
+            fallback = (
+                f"I found {product_summary['count']} past case(s) for "
+                f"{product_summary['product']}.{example_line} "
+                "What problem are you seeing? Describe it and I'll find the matching resolution."
+            )
+            return {"reply": fallback, "hits": [], "grounded": False}
+
+    hits = hybrid_search(search_query, _SETTINGS, top_k=5)
 
     # This is the key guarantee: Gemini is never even SHOWN a case whose
     # distance says it isn't actually relevant. It can't ground an answer
@@ -177,7 +206,7 @@ def chat(req: ChatRequest) -> dict:
     grounding_hits = [h for h in hits if h["distance"] <= GOOD_MATCH_MAX_DISTANCE]
 
     try:
-        reply = generate_reply(q, grounding_hits)
+        reply = generate_reply(q, grounding_hits, greet=req.first)
         return {"reply": reply, "hits": hits, "grounded": True}
     except Exception as exc:  # noqa: BLE001 -- deliberately broad: never crash chat
         print(f"[chat] Gemini unavailable, falling back to retrieval-only: {exc}")
@@ -230,7 +259,7 @@ def embedding_map(req: EmbeddingMapRequest) -> dict:
     # or the plot would misleadingly show a different point than the one
     # retrieval really used.
     search_query = translate_to_english(q)
-    hits = semantic_search(search_query, _SETTINGS, top_k=5)
+    hits = hybrid_search(search_query, _SETTINGS, top_k=5)
     hit_ids = {h["case_id"] for h in hits}
 
     query_point = em.project_query(search_query)

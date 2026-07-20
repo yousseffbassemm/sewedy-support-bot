@@ -15,8 +15,9 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 import pandas as pd
 from pydantic import BaseModel
@@ -71,6 +72,36 @@ def clean_text(value: str) -> str:
     return value
 
 
+def product_key(product: str) -> str:
+    """Casing/spacing-insensitive identity for a product name.
+
+    'AeroSense G3', 'aerosense g3' and 'AEROSENSE  G3' all key to the same
+    product -- which is what lets them be grouped as one device.
+    """
+    return _WHITESPACE_RE.sub(" ", product).strip().lower()
+
+
+def canonical_product_map(products: Iterable[str]) -> dict[str, str]:
+    """Decide one canonical spelling per product, by majority vote.
+
+    The export has the same device under several spellings ('AeroSense G3'
+    x16 vs 'aerosense g3' x1). Left alone they behave as different products:
+    a search for one silently misses the other's cases. The most common
+    spelling wins, so the data decides -- no hardcoded product list to keep
+    in sync as the catalogue grows. Ties break alphabetically, so a rebuild
+    on unchanged data always produces an identical corpus.
+    """
+    variants: dict[str, Counter] = defaultdict(Counter)
+    for raw in products:
+        cleaned = clean_text(raw)
+        if cleaned:
+            variants[product_key(cleaned)][cleaned] += 1
+    return {
+        key: max(sorted(counter), key=lambda spelling: counter[spelling])
+        for key, counter in variants.items()
+    }
+
+
 def profile_csv(df: pd.DataFrame) -> None:
     """Print a quick report on the raw data before we trust it."""
     print(f"[ingest] rows: {len(df)}")
@@ -112,12 +143,22 @@ def build_text(case: dict[str, str]) -> str:
     return " / ".join(parts)
 
 
-def to_canonical(row: dict[str, str]) -> tuple[Optional[SupportCase], Optional[str]]:
+def to_canonical(
+    row: dict[str, str], product_canon: dict[str, str] | None = None
+) -> tuple[Optional[SupportCase], Optional[str]]:
     """Clean one row and apply quality gates.
+
+    `product_canon` (from canonical_product_map) folds spelling variants of a
+    product onto one name. Omit it to clean a row as-is.
 
     Returns (SupportCase, None) on success, or (None, reason) on rejection.
     """
     cleaned = {col: clean_text(row.get(col, "")) for col in CANONICAL_COLUMNS}
+
+    if product_canon and cleaned["product"]:
+        cleaned["product"] = product_canon.get(
+            product_key(cleaned["product"]), cleaned["product"]
+        )
 
     if not cleaned["case_id"]:
         return None, "missing_case_id"
@@ -138,12 +179,24 @@ def build_corpus(settings: Settings) -> tuple[list[SupportCase], list[dict]]:
     profile_csv(df)
     df = map_columns(df)
 
+    # Built from the whole file before any row is converted -- a majority vote
+    # needs to have seen every spelling first.
+    product_canon = canonical_product_map(df["product"])
+    folded = {
+        spelling
+        for key, canonical in product_canon.items()
+        for spelling in df["product"].unique()
+        if product_key(clean_text(spelling)) == key and clean_text(spelling) != canonical
+    }
+    if folded:
+        print(f"[ingest] product spellings folded onto a canonical name: {sorted(folded)}")
+
     clean_cases: list[SupportCase] = []
     rejected: list[dict] = []
     seen_ids: set[str] = set()
 
     for row in df.to_dict(orient="records"):
-        case, reason = to_canonical(row)
+        case, reason = to_canonical(row, product_canon)
         if case is None:
             rejected.append({**row, "reject_reason": reason})
             continue

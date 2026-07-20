@@ -1,22 +1,5 @@
 """
 backend.llm -- Gemini-generated replies, grounded in retrieved cases.
-
-This is the ONE piece of the stack that needs the internet and (beyond a free
-tier) can cost money -- everything else (embeddings, ChromaDB, auth) is free
-and local. Requires GEMINI_API_KEY in backend/.env. Get a free key at
-https://aistudio.google.com/apikey -- Google AI Studio's free tier covers
-light development use.
-
-If the key is missing or the call fails for any reason (rate limit, network,
-bad key), generate_reply() raises, and main.py falls back to a plain
-retrieval-only reply rather than crashing the chat.
-
-Uses the current Google GenAI SDK (`google-genai` package, `from google import
-genai`) -- NOT the older, now-deprecated `google-generativeai` package that
-a lot of older tutorials still show.
-
-Model: gemini-2.5-flash -- fast and inexpensive, appropriate for short,
-grounded replies over a small context.
 """
 
 from __future__ import annotations
@@ -28,36 +11,21 @@ from google import genai
 from google.genai import types
 
 MODEL = "gemini-2.5-flash"
-MAX_OUTPUT_TOKENS = 500
+# Enough headroom for a full 5-case Problem/Resolution listing. Arabic replies
+# spend noticeably more tokens on the same content, and a truncated answer
+# would cut off mid-resolution.
+MAX_OUTPUT_TOKENS = 900
 
 _ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 
 
 def needs_translation(text: str) -> bool:
-    """Heuristic: does this look like it contains Arabic script? Cheap local
-    check, no API call, so English queries (the common case) never pay for
-    a translation round-trip they don't need."""
+    """Heuristic: does this look like it contains Arabic script?"""
     return bool(_ARABIC_RE.search(text))
 
 
 def translate_to_english(query: str) -> str:
-    """Translate a non-English query to English before retrieval.
-
-    Why this exists: the embedder (MiniLM, all-MiniLM-L6-v2) was trained
-    almost entirely on English text. Embedding an Arabic query with it does
-    NOT produce a vector that meaningfully represents the query's meaning
-    the way it does for English -- the "closest matches" ChromaDB returns
-    for an Arabic query are close to random, not actually relevant. This
-    silently produced wrong-looking answers with no error anywhere, which
-    is worse than an outright failure. Translating to English first gives
-    retrieval something the embedder can actually work with; the final
-    reply is still generated in the user's original language (see
-    generate_reply's LANGUAGE instruction) -- only the *retrieval* step
-    uses the translation.
-
-    Falls back to returning the original query untouched if translation
-    fails for any reason (no key, network, bad response) -- never crashes
-    the chat over this, same policy as generate_reply."""
+    """Translate non-English queries to English before retrieval."""
     if not needs_translation(query):
         return query
 
@@ -73,78 +41,178 @@ def translate_to_english(query: str) -> str:
             config=types.GenerateContentConfig(
                 system_instruction=(
                     "Translate the user's message to English. Return ONLY the "
-                    "English translation, nothing else -- no quotes, no explanation."
+                    "English translation, nothing else."
                 ),
                 max_output_tokens=200,
                 temperature=0,
                 thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
-        translated = (response.text or "").strip()
-        return translated or query
-    except Exception:  # noqa: BLE001 -- translation is best-effort, never fatal
+        return (response.text or "").strip() or query
+    except Exception:
         return query
 
 
-_SYSTEM_PROMPT = """You are SupportBot, a helpful teammate for Elsewedy Electric's device support team, chatting directly with an engineer.
+_SYSTEM_PROMPT = """You are SupportBot, a technical support assistant.
 
-LANGUAGE: Always reply in the SAME language the user's message is written in. If they write in Arabic, reply entirely in Arabic. If English, reply in English. The retrieved case data below is in English regardless -- translate the relevant content into the user's language yourself, in your own words. Never default to English just because the case data is in English.
+LANGUAGE: Always reply in the SAME language the user's message is written in. Translate the case content into the user's language yourself.
 
-GROUNDING -- this is the most important rule, more important than sounding natural:
-- The cases listed below (if any) have already been filtered to only genuinely relevant matches for this exact query -- if the list below is empty, that means NOTHING relevant was found, full stop. Do not describe, hint at, or paraphrase any other case in that situation; just say plainly that nothing close was found.
-- Before answering, explicitly check: does the case's own "Problem:" text describe the SAME specific symptom the user just described -- not just the same product or same general area? Same product with a DIFFERENT specific symptom is NOT a match.
-  Example of what NOT to do: user asks about configuration resetting after a power cycle; the closest retrieved case is actually about random reboots caused by an undersized power supply on the SAME product. These are different problems. Do not present the power-supply fix as if it resolves the configuration-reset issue just because it's the same product and the closest thing available -- say plainly that no case matches this specific symptom instead.
-- Base your answer on ONLY the single closest matching case (the first one listed below, lowest distance) unless a second case is genuinely needed to fully answer the question.
-- NEVER blend or combine details from multiple different cases into one invented narrative (e.g. do not say "we've seen this with Product A and Product B" unless BOTH literally appear together in the SAME case's cause/resolution -- if they're in separate cases, only describe the one case you're actually citing).
-- NEVER state a cause, fix, or product that is not written, word for word in substance, in the case content given below. If you're not sure a detail is actually in the retrieved text, leave it out rather than guess or infer a plausible-sounding elaboration.
-- The resolution you describe must address the SAME problem the person described -- never repurpose a resolution that was for a different symptom, even if it's the closest thing available.
+GROUNDING RULES (these override every formatting rule below):
+- The "Retrieved cases" section of the user message is your ONLY source of cases. Never invent a product name, a problem, or a resolution, and never use cases from earlier messages or your own knowledge.
+- Every case you list must be copied faithfully from the retrieved cases.
+- If the retrieved cases section says none were retrieved (or is empty), you have NOTHING to list: reply with one short sentence saying no matching past cases were found, and output NO Problem/Resolution lines and NO lead-in sentence. Do not fabricate cases to fill the list.
+- Do NOT use Markdown (no **, no __, no #, no bullets). The interface applies its own styling.
 
-STYLE: Speak naturally and warmly, like a knowledgeable colleague, not a formal report. Do not recite case IDs or labels like "Cause:"/"Resolution:" -- just talk normally about what happened and what fixed it, restricted strictly to what that one case actually says.
+OUTPUT FORMAT (CRITICAL):
+When -- and only when -- you have at least one retrieved case to list, open with ONE short lead-in sentence making clear these came from past support cases -- for example "Here are the problems and resolutions I found in past cases:". Then a blank line, then the cases.
 
-Behavior:
-- Casual messages (greetings, thanks, small talk, "what are you") get a natural, brief, friendly reply in the user's own language -- then gently invite them to describe an issue.
-- A device issue with a relevant retrieved case: explain in your own words what was wrong and what fixed it, using ONLY that case's actual content.
-- A device issue with no good matches: say plainly that nothing close was found -- don't guess.
-- Keep it short: 2-3 sentences, like a real chat reply, not a summary.
+Write each case as exactly two lines -- a "Problem:" line, then a "Resolution:" line directly beneath it:
+
+Here are the problems and resolutions I found in past cases:
+
+Problem: [the problem text]
+Resolution: [the resolution text]
+
+Separate consecutive cases with one blank line:
+
+Problem: [first problem]
+Resolution: [first resolution]
+
+Problem: [second problem]
+Resolution: [second resolution]
+
+Rules for this format:
+- Always start a list of cases with the single lead-in sentence described above, then a blank line before the first Problem.
+- Never put "Problem:" and "Resolution:" on the same line.
+- Never write a case with a Problem but no Resolution.
+- Each label sits at the very start of its line, followed by a colon.
+- When replying in another language, write the lead-in sentence AND translate the labels too (the interface styles whatever label starts the line).
+
+BEHAVIOR:
+- The user is describing a specific problem: find the retrieved case whose Problem actually matches the symptom they describe, and give THAT case's Problem with ITS OWN Resolution. The Resolution you show must belong to the same case as the Problem above it -- never answer one problem with another case's fix.
+- If several retrieved cases genuinely describe the same symptom, list each as its own Problem/Resolution pair.
+- If none of the retrieved cases matches the symptom the user described, say plainly that no matching past case was found. Do NOT stretch an unrelated case to fit, and do not guess a resolution.
+- Casual message (greeting, thanks): reply briefly in one line, with no Problem/Resolution block.
 """
+
+# Appended to the system prompt per request. The greeting is gated on the first
+# question so it happens once, not before every answer.
+_GREETING_RULE = (
+    "\nGREETING: This is the user's first message in the chat. Open your reply "
+    "with one short, warm greeting sentence in the user's language, then continue "
+    "with the answer in the format above."
+)
+_NO_GREETING_RULE = (
+    "\nGREETING: Do NOT greet. Go straight to the answer with no greeting or pleasantries."
+)
+
+# Used when the user typed only a product name. Overrides the case-listing
+# format above: summarise instead of dumping every case.
+_PRODUCT_SUMMARY_RULE = (
+    "\nMODE -- PRODUCT OVERVIEW: The user named a product without describing a "
+    "specific problem. Do EXACTLY these three things, in the user's language, and "
+    "nothing else:\n"
+    "1. State how many past cases were found for this product, using EXACTLY the "
+    "number given in the product info (do not recount or change it).\n"
+    "2. If an example problem is provided, give it, phrased like: For example, one "
+    "of the cases is: <the example problem text>. If no example is provided, skip "
+    "this line entirely -- never invent an example.\n"
+    "3. Ask the user to describe the specific problem they are facing, so you can "
+    "find the matching resolution.\n"
+    "Do NOT list multiple cases, do NOT give any resolution, and do NOT use the "
+    "'Here are the problems and resolutions' lead-in. Keep it short."
+)
+
+
+def _format_product_summary(summary: dict) -> str:
+    """The context block for a product-overview reply -- the real corpus count
+    and one example problem, which the model must relay rather than invent."""
+    example = summary.get("example_problem", "")
+    example_line = (
+        f"Example problem to quote: {example}"
+        if example
+        else "Example problem to quote: (none available -- do not include an example)"
+    )
+    return (
+        "Product info (the user named this product with no specific symptom):\n"
+        f"Product: {summary.get('product', '')}\n"
+        f"Number of past cases for this product in the data: {summary.get('count', 0)}\n"
+        f"{example_line}"
+    )
 
 
 def _format_context(hits: list[dict]) -> str:
+    """Lay each case out as discrete labelled fields.
+
+    The model is asked to echo Problem/Resolution back verbatim, so it has to
+    receive them as separate fields. Handing over the whole `document` blob
+    instead leaves it to re-parse the fix out of the prose -- which is exactly
+    the guesswork grounding is supposed to remove.
+    """
     if not hits:
-        return "(no relevant cases retrieved for this message)"
-    lines = []
-    for h in hits:
-        lines.append(
-            f"- Case {h['case_id']} | {h['product']} / {h['category']} "
-            f"(semantic distance {h['distance']:.3f}, lower = closer match)\n"
-            f"  {h['document']}"
+        return (
+            "NONE. No past cases were retrieved for this message. "
+            "Do not list or invent any Problem/Resolution cases. If the user asked "
+            "about a device, product, or problem, tell them no matching past cases "
+            "were found. If the message is just a greeting or small talk, simply "
+            "reply to it briefly and naturally."
         )
-    return "\n".join(lines)
+
+    blocks = []
+    for h in hits:
+        fields = [
+            f"Case ID: {h.get('case_id', '')}",
+            f"Product: {h.get('product', '')}",
+            f"Category: {h.get('category', '')}",
+            f"Problem: {h.get('problem', '')}",
+        ]
+        if h.get("cause"):
+            fields.append(f"Cause: {h['cause']}")
+        fields.append(f"Resolution: {h.get('resolution', '')}")
+        blocks.append("\n".join(fields))
+
+    return "\n\n---\n\n".join(blocks)
 
 
-def generate_reply(query: str, hits: list[dict]) -> str:
-    """Ask Gemini for a short, grounded reply. Raises RuntimeError/SDK errors
-    on failure -- callers should catch and fall back gracefully."""
+def generate_reply(
+    query: str,
+    hits: list[dict],
+    greet: bool = False,
+    product_summary: dict | None = None,
+) -> str:
+    """Ask Gemini for a short, grounded reply.
+
+    `greet` is True only for the first question in a chat, which adds a single
+    opening greeting; every later reply goes straight to the answer.
+
+    `product_summary` (from rag.retrieve.detect_product_query) switches the
+    reply into overview mode: report the case count + one example and ask for
+    the specific problem, instead of answering with a resolution.
+    """
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in backend/.env")
 
     client = genai.Client(api_key=api_key)
-    context = _format_context(hits)
+
+    if product_summary is not None:
+        context = _format_product_summary(product_summary)
+        mode_rule = _PRODUCT_SUMMARY_RULE
+    else:
+        context = _format_context(hits)
+        mode_rule = ""
+
+    system_instruction = (
+        _SYSTEM_PROMPT + mode_rule + (_GREETING_RULE if greet else _NO_GREETING_RULE)
+    )
 
     response = client.models.generate_content(
         model=MODEL,
         contents=f"User message: {query}\n\nRetrieved cases:\n{context}",
         config=types.GenerateContentConfig(
-            system_instruction=_SYSTEM_PROMPT,
+            system_instruction=system_instruction,
             max_output_tokens=MAX_OUTPUT_TOKENS,
             temperature=0.3,
-            # Gemini 2.5 Flash has "thinking" on by default, and thinking
-            # tokens are deducted from the SAME max_output_tokens budget as
-            # the visible reply -- this silently truncates short answers
-            # (a known, documented behavior, not a bug in this code). This
-            # task is simple grounded Q&A, not multi-step reasoning, so we
-            # turn thinking off and give the full budget to the actual reply.
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )

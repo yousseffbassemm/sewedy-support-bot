@@ -1,0 +1,17 @@
+[
+  { "id": "q1",  "query": "AeroSense G3 firmware update keeps failing partway",        "type": "identifier" },
+  { "id": "q2",  "query": "PowerTrack P1 firmware update fails halfway",                "type": "identifier" },
+  { "id": "q3",  "query": "FlowMeter X200 keeps rebooting on its own",                  "type": "identifier" },
+  { "id": "q4",  "query": "GridLink Hub drops several devices after a reboot",          "type": "identifier" },
+  { "id": "q5",  "query": "ThermoNode T5 refuses the firmware update",                  "type": "identifier" },
+  { "id": "q6",  "query": "the sensor's numbers keep creeping upward over the weeks",   "type": "paraphrase" },
+  { "id": "q7",  "query": "my device restarts by itself for no clear reason",           "type": "paraphrase" },
+  { "id": "q8",  "query": "the screen stays black when I turn the unit on",             "type": "paraphrase" },
+  { "id": "q9",  "query": "the temperature it reports is off by a couple of degrees",   "type": "paraphrase" },
+  { "id": "q10", "query": "something is rattling around loose inside the case",         "type": "paraphrase" },
+  { "id": "q11", "query": "the device is completely dead and won't power up",           "type": "paraphrase" },
+  { "id": "q12", "query": "I can't get the hub onto the network at all",                "type": "paraphrase" },
+  { "id": "q13", "query": "how do I reset my password",                                 "type": "out_of_domain" },
+  { "id": "q14", "query": "when is payday this month",                                  "type": "out_of_domain" },
+  { "id": "q15", "query": "book a conference room for tomorrow morning",                "type": "out_of_domain" }
+]
