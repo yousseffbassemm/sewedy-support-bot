@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-and-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Build corpus + vector index
+        run: |
+          uv run python -m rag.ingest
+          uv run python -m rag.index
+
+      - name: Run tests
+        run: uv run pytest -q
+
+      # Gate on retrieval quality: the served hybrid engine must stay at 100%
+      # Hit@1 on identifier + paraphrase queries and 100% out-of-domain
+      # rejection. eval_retriever exits non-zero on any regression.
+      - name: Retriever evaluation gate
+        run: uv run python -m eval.eval_retriever

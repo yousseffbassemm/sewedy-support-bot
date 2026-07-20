@@ -1,0 +1,18 @@
+# Runs the SupportBot backend in a container with the vector index prebuilt.
+# The React frontend is a separate project (supportbot-ui) run with `npm run
+# dev`; point its API_BASE at http://localhost:8000.
+#
+#   GEMINI_API_KEY=... JWT_SECRET=... docker compose up --build
+#
+# Secrets come from the environment (or a sibling .env file); nothing secret is
+# committed or baked into the image.
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
+    restart: unless-stopped

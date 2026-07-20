@@ -1,0 +1,13 @@
+.git/
+.github/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/chroma/
+backend/.env
+backend/data/
+.hf_cache/
+node_modules/
+*.md
