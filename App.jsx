@@ -454,7 +454,7 @@ function Landing({ onStart, session }) {
           <p style={styles.eyebrow} className="rise" >
             {t.eyebrow}
           </p>
-          <h1 style={styles.h1}>
+          <h1 style={styles.h1} className="h1Mobile">
             <span className="rise d1">{t.heroLine1}</span>
             <br />
             <span className="rise d2">{t.heroLine2}</span>
@@ -1076,6 +1076,7 @@ function Chat({ session, onHome, onSignOut }) {
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); // mobile sidebar drawer
   const scroller = useRef(null);
 
   useEffect(() => {
@@ -1135,7 +1136,12 @@ function Chat({ session, onHome, onSignOut }) {
 
   return (
     <div style={styles.chatShell}>
-      <aside style={styles.sidebar} className="sidebar-hide">
+      <div
+        className={`chatBackdrop${menuOpen ? " open" : ""}`}
+        onClick={() => setMenuOpen(false)}
+        aria-hidden="true"
+      />
+      <aside style={styles.sidebar} className={`chatSidebar${menuOpen ? " open" : ""}`}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 18px 0" }}>
           <button
             onClick={onHome}
@@ -1155,7 +1161,10 @@ function Chat({ session, onHome, onSignOut }) {
               style={{ ...styles.suggest, animationDelay: `${0.15 + i * 0.08}s` }}
               className="suggestBtn rise"
               dir={lang === "ar" ? "rtl" : "ltr"}
-              onClick={() => setInput(s)}
+              onClick={() => {
+                setInput(s);
+                setMenuOpen(false);
+              }}
             >
               {s}
             </button>
@@ -1179,11 +1188,22 @@ function Chat({ session, onHome, onSignOut }) {
 
       <main style={styles.chatMain}>
         <header style={styles.chatHead}>
-          <div style={styles.chatHeadInner}>
-            <div>
-              <div style={styles.chatTitle}>{t.chatTitle}</div>
-              <div style={styles.chatSubtitle}>
-                {t.chatSubtitle(CASE_COUNT)}
+          <div style={styles.chatHeadInner} className="chatPad">
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+              <button
+                className="mobileMenuBtn"
+                aria-label="Menu"
+                onClick={() => setMenuOpen(true)}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+              </button>
+              <div style={{ minWidth: 0 }}>
+                <div style={styles.chatTitle}>{t.chatTitle}</div>
+                <div style={styles.chatSubtitle}>
+                  {t.chatSubtitle(CASE_COUNT)}
+                </div>
               </div>
             </div>
             <div style={styles.livePill}>
@@ -1193,7 +1213,7 @@ function Chat({ session, onHome, onSignOut }) {
           </div>
         </header>
 
-        <div ref={scroller} style={styles.stream} className="themedScroll">
+        <div ref={scroller} style={styles.stream} className="themedScroll chatPad">
           <div style={styles.streamInner}>
             {messages.map((m, i) => (
               <Message key={i} m={m} />
@@ -1210,7 +1230,7 @@ function Chat({ session, onHome, onSignOut }) {
           </div>
         </div>
 
-        <div style={styles.composer}>
+        <div style={styles.composer} className="chatPad">
           <div style={styles.composerInner}>
             <input
               style={styles.composerInput}
@@ -1689,11 +1709,47 @@ function GlobalStyle() {
         html { scroll-behavior: auto; }
       }
 
+      /* --- mobile drawer (chat sidebar) --- */
+      .mobileMenuBtn { display: none; }
+      .chatBackdrop { display: none; }
+      @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
       @media (max-width: 900px) {
         .hero-grid { grid-template-columns: 1fr !important; }
         .auth-grid { grid-template-columns: 1fr !important; }
         .auth-art-hide { display: none !important; }
-        .sidebar-hide { display: none !important; }
+
+        .mobileMenuBtn {
+          display: inline-flex !important; align-items: center; justify-content: center;
+          width: 40px; height: 40px; border-radius: 11px; border: 1.5px solid ${C.line};
+          background: #fff; color: ${C.ink}; flex-shrink: 0;
+          transition: border-color .15s ease, transform .15s ease;
+        }
+        .mobileMenuBtn:hover { border-color: ${C.red}; }
+        .mobileMenuBtn:active { transform: scale(.94); }
+
+        .chatSidebar {
+          position: fixed; top: 0; bottom: 0; inset-inline-start: 0; z-index: 60;
+          width: 284px; max-width: 82vw;
+          transform: translateX(-110%);
+          transition: transform .34s cubic-bezier(.16,1,.3,1);
+          box-shadow: 0 0 50px rgba(0,0,0,.28);
+        }
+        [dir="rtl"] .chatSidebar { transform: translateX(110%); }
+        .chatSidebar.open { transform: translateX(0) !important; }
+
+        .chatBackdrop.open {
+          display: block; position: fixed; inset: 0; z-index: 55;
+          background: rgba(20,18,16,.45); backdrop-filter: blur(2px);
+          animation: fadeIn .25s ease both;
+        }
+
+        .chatPad { padding-inline: 16px !important; }
+        .h1Mobile { font-size: 40px !important; }
+      }
+
+      @media (max-width: 520px) {
+        .h1Mobile { font-size: 33px !important; }
       }
     `}</style>
   );
