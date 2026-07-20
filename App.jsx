@@ -128,6 +128,8 @@ const TRANSLATIONS = {
       "Device reboots randomly",
     ],
     previewMeta: (d) => `matched in 0.3s · cosine ${d}`,
+    emptyHint:
+      "Pick an example on the left, or describe your issue below — I'll surface the closest resolved cases.",
     welcome: (name) =>
       `Hi ${name || "there"} — describe a device issue and I'll find the closest resolved cases.`,
     searching: "Searching by meaning…",
@@ -226,6 +228,8 @@ const TRANSLATIONS = {
       "الجهاز يعيد التشغيل بشكل عشوائي",
     ],
     previewMeta: (d) => `طوبِقت في 0.3 ثانية · جيب التمام ${d}`,
+    emptyHint:
+      "اختر مثالاً من القائمة، أو صف مشكلتك بالأسفل — وسأعرض أقرب الحالات التي تم حلّها.",
     welcome: (name) =>
       `مرحباً ${name || "بك"} — صف مشكلة الجهاز وسأجد أقرب الحالات التي تم حلّها.`,
     searching: "يبحث بالمعنى…",
@@ -1078,6 +1082,17 @@ function Chat({ session, onHome, onSignOut }) {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
+  // Keep the opening welcome bubble in the active language: it's created once
+  // at mount, so a later language toggle would otherwise leave it stranded.
+  useEffect(() => {
+    setMessages((m) =>
+      m.length === 1 && m[0].who === "bot" && m[0].kind === "text"
+        ? [{ ...m[0], text: t.welcome(session?.username) }]
+        : m
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
+
   const send = async () => {
     const q = input.trim();
     if (!q || busy) return;
@@ -1183,6 +1198,14 @@ function Chat({ session, onHome, onSignOut }) {
             {messages.map((m, i) => (
               <Message key={i} m={m} />
             ))}
+            {messages.filter((m) => m.who === "user").length === 0 && !busy && (
+              <div style={styles.emptyWrap} className="emptyFade">
+                <div className="emptyArc">
+                  <Arc width={150} />
+                </div>
+                <div style={styles.emptyHint}>{t.emptyHint}</div>
+              </div>
+            )}
             {busy && <Typing />}
           </div>
         </div>
@@ -1261,20 +1284,8 @@ function CopyButton({ text }) {
     }
   };
   return (
-    <button
-      onClick={copy}
-      style={{
-        background: "none",
-        border: `1px solid ${C.line}`,
-        borderRadius: 8,
-        cursor: "pointer",
-        fontSize: 12,
-        color: C.mute,
-        padding: "4px 8px",
-      }}
-      title={label}
-    >
-      {copied ? "✓ " : "⧉ "}
+    <button onClick={copy} className="answerBtn" title={label}>
+      <span aria-hidden="true">{copied ? "✓" : "⧉"}</span>
       {label}
     </button>
   );
@@ -1300,27 +1311,15 @@ function AnswerFeedback({ query, caseId }) {
     }
   };
 
-  const btn = {
-    background: "none",
-    border: `1px solid ${C.line}`,
-    borderRadius: 8,
-    cursor: "pointer",
-    fontSize: 15,
-    lineHeight: 1,
-    padding: "4px 8px",
-  };
-
   if (voted) {
-    return (
-      <div style={{ marginTop: 6, fontSize: 12, color: C.mute }}>{txt.thanks}</div>
-    );
+    return <span style={{ fontSize: 12, color: C.mute }}>{txt.thanks}</span>;
   }
   return (
-    <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
-      <span style={{ fontSize: 12, color: C.mute }}>{txt.prompt}</span>
-      <button style={btn} onClick={() => send("up")} aria-label="Helpful" title="Helpful">👍</button>
-      <button style={btn} onClick={() => send("down")} aria-label="Not helpful" title="Not helpful">👎</button>
-    </div>
+    <>
+      <span style={{ fontSize: 12, color: C.mute, marginInlineStart: 2 }}>{txt.prompt}</span>
+      <button className="answerBtn up" onClick={() => send("up")} aria-label="Helpful" title="Helpful">👍</button>
+      <button className="answerBtn down" onClick={() => send("down")} aria-label="Not helpful" title="Not helpful">👎</button>
+    </>
   );
 }
 
@@ -1336,7 +1335,7 @@ function Message({ m }) {
   if (m.kind === "text" || m.kind === "empty") {
     return (
       <div style={styles.rowLeft}>
-        <div style={styles.botBubble} className="pop">
+        <div style={styles.botBubble} className="pop botBubbleHover">
           <FormattedReply text={m.text} />
         </div>
       </div>
@@ -1347,18 +1346,21 @@ function Message({ m }) {
   return (
     <div style={styles.rowLeft}>
       <div style={{ maxWidth: 660 }}>
-        <div style={styles.botBubble} className="pop">
+        <div style={styles.botBubble} className="pop botBubbleHover">
           <FormattedReply text={m.text} />
           {m.grounded === false && (
             <div style={styles.fallbackNote}>{t.serviceUnavailable}</div>
           )}
         </div>
-        <div style={{ marginTop: 6 }}>
+        <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <CopyButton text={m.text} />
+          {m.hits && m.hits.length > 0 && (
+            <>
+              <span style={{ width: 1, height: 16, background: C.line, margin: "0 2px" }} aria-hidden="true" />
+              <AnswerFeedback query={m.query} caseId={m.hits[0]?.case_id} />
+            </>
+          )}
         </div>
-        {m.hits && m.hits.length > 0 && (
-          <AnswerFeedback query={m.query} caseId={m.hits[0]?.case_id} />
-        )}
         {m.query && <EmbeddingMapView query={m.query} />}
       </div>
     </div>
@@ -1658,6 +1660,29 @@ function GlobalStyle() {
 
       input:focus { outline: none; border-color: ${C.red} !important; box-shadow: 0 0 0 3px rgba(227,6,19,.12); }
 
+      /* Unified answer-toolbar buttons (copy / thumbs) — ghost, not boxed. */
+      .answerBtn {
+        background: transparent; border: 1px solid transparent; border-radius: 9px;
+        color: ${C.mute}; font-size: 12px; padding: 5px 10px;
+        display: inline-flex; align-items: center; gap: 5px; line-height: 1;
+        transition: background .16s ease, color .16s ease, transform .16s cubic-bezier(.34,1.56,.64,1);
+      }
+      .answerBtn:hover { background: rgba(26,26,26,.055); color: ${C.ink}; transform: translateY(-1px); }
+      .answerBtn.up:hover { background: rgba(31,157,85,.13); color: ${C.ok}; }
+      .answerBtn.down:hover { background: rgba(227,6,19,.10); color: ${C.red}; }
+      .answerBtn:active { transform: scale(.92); }
+
+      /* Answer bubbles lift a touch on hover — subtle depth, not a toy. */
+      .botBubbleHover { transition: box-shadow .28s ease, transform .28s ease; }
+      .botBubbleHover:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(26,26,26,.10), 0 2px 8px rgba(26,26,26,.05); }
+
+      @keyframes floatArc {
+        0%,100% { transform: translateY(0) scaleX(1); opacity: .5; }
+        50%     { transform: translateY(-7px) scaleX(1.05); opacity: .8; }
+      }
+      .emptyArc { animation: floatArc 4.5s ease-in-out infinite; }
+      .emptyFade { animation: floatIn 1.1s cubic-bezier(.16,1,.3,1) both .15s; }
+
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation: none !important; transition: none !important; }
         .rise, .floatIn, .pop, .pageIn { opacity: 1 !important; }
@@ -1843,7 +1868,10 @@ const styles = {
 
   chatMain: {
     flex: 1, display: "flex", flexDirection: "column", minWidth: 0,
-    background: "linear-gradient(180deg, #FAFAF8 0%, #F5F3EF 100%)",
+    background:
+      "radial-gradient(1100px 460px at 82% -12%, rgba(227,6,19,.055), transparent 62%)," +
+      "radial-gradient(820px 480px at -8% 112%, rgba(26,26,26,.04), transparent 60%)," +
+      "linear-gradient(180deg, #FAFAF8 0%, #F4F2EE 100%)",
   },
   chatHead: {
     padding: "0 28px", borderBottom: `1px solid ${C.line}`, background: "#fff",
@@ -1887,13 +1915,19 @@ const styles = {
     fontSize: 14.5, maxWidth: 560, lineHeight: 1.5,
   },
   botBubble: {
-    background: "#fff", border: `1px solid ${C.line}`, padding: "12px 16px",
-    borderRadius: "16px 16px 16px 4px", fontSize: 14.5, maxWidth: 620, lineHeight: 1.55,
-    boxShadow: "0 4px 14px rgba(26,26,26,.05)",
+    background: "#fff", border: `1px solid ${C.line}`, padding: "14px 18px",
+    borderRadius: "18px 18px 18px 5px", fontSize: 14.5, maxWidth: 620, lineHeight: 1.55,
+    boxShadow: "0 6px 20px rgba(26,26,26,.06), 0 1px 3px rgba(26,26,26,.04)",
   },
 
   // Gap between consecutive Problem/Resolution cases in one reply.
   replyBlock: { marginTop: 12 },
+
+  emptyWrap: {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+    margin: "44px auto 10px", textAlign: "center", maxWidth: 340,
+  },
+  emptyHint: { fontSize: 13.5, color: C.mute, lineHeight: 1.65 },
 
   fallbackNote: { fontSize: 12, color: C.mute, marginTop: 8, fontStyle: "italic" },
 
