@@ -406,29 +406,34 @@ const useTheme = () => useContext(ThemeContext);
 const useLang = () => useContext(LangContext);
 
 // ---------------------------------------------------------------------------
-// Logo — the real Elsewedy Electric mark (public/logo.png). `mono` renders it
-// white for dark/branded backgrounds; `animateArc` gives it a soft reveal on
+// Logo — the real Elsewedy Electric mark (public/logo.png). `mono` selects the
+// dark-surface variant (white wordmark, red arc); `animateArc` gives it a soft reveal on
 // the auth splash. Props are kept identical to the old inline-SVG version so
 // every call site works unchanged.
 // ---------------------------------------------------------------------------
 function Logo({ height = 34, mono = false, animateArc = false }) {
   const { theme } = useTheme();
-  // The source art is black text + a red arc. It needs inverting both on
-  // explicitly dark panels (mono) and throughout dark mode, where the page
-  // itself is the dark surface -- otherwise the wordmark goes near-invisible.
-  // Set here rather than in CSS because the inline filter would override any
-  // stylesheet rule.
-  const invert = mono || theme === "dark";
+  // Two real assets rather than a CSS filter. The source art is a black
+  // wordmark + the red Elsewedy arc, and any filter that lightens the text
+  // destroys the arc with it: `brightness(0) invert(1)` crushes every pixel to
+  // black first, turning the arc white. `invert(1) hue-rotate(180deg)` keeps a
+  // red-ish arc but only approximately, and shifts it off brand.
+  //
+  // logo-dark.png is generated from logo.png (see tools/make_dark_logo.py):
+  // chromatic pixels are copied through untouched so the arc stays exactly
+  // #E30613, and achromatic pixels are inverted on luminance so the wordmark
+  // reads neutral white. Per-channel inversion was visibly green there --
+  // the source text carries a faint magenta cast.
+  const onDark = mono || theme === "dark";
   return (
     <img
-      src="/logo.png"
+      src={onDark ? "/logo-dark.png" : "/logo.png"}
       alt="Elsewedy Electric"
       height={height}
       style={{
         height,
         width: "auto",
         display: "block",
-        filter: invert ? "brightness(0) invert(1)" : "none",
         animation: animateArc ? "logoReveal 0.7s ease forwards" : undefined,
       }}
     />
