@@ -120,6 +120,7 @@ const TRANSLATIONS = {
     tryAsking: "Try asking",
     signOut: "Sign out",
     composerPlaceholder: "Describe the issue…",
+    send: "Send",
     welcome: (name) =>
       `Hi ${name || "there"} — describe a device issue and I'll find the closest resolved cases.`,
     searching: "Searching by meaning…",
@@ -146,6 +147,8 @@ const TRANSLATIONS = {
     consoleModeNotice:
       "Server is in console mode — no real email sent. Check the terminal running the backend for your code.",
     codeSentNotice: "Code sent — check your inbox (and spam).",
+    serviceUnavailable: "Answer-writing service unavailable.",
+    chatError: "Couldn't reach the chat service. Is the backend running?",
   },
   ar: {
     navHow: "كيف يعمل",
@@ -208,6 +211,7 @@ const TRANSLATIONS = {
     tryAsking: "جرّب أن تسأل",
     signOut: "تسجيل الخروج",
     composerPlaceholder: "صف المشكلة…",
+    send: "إرسال",
     welcome: (name) =>
       `مرحباً ${name || "بك"} — صف مشكلة الجهاز وسأجد أقرب الحالات التي تم حلّها.`,
     searching: "يبحث بالمعنى…",
@@ -234,8 +238,44 @@ const TRANSLATIONS = {
     consoleModeNotice:
       "الخادم في وضع الطرفية — لم يُرسل بريد فعلي. تحقق من الطرفية التي تُشغّل الخادم للحصول على الرمز.",
     codeSentNotice: "تم إرسال الرمز — تحقق من بريدك (ومجلد الرسائل غير المرغوب فيها).",
+    serviceUnavailable: "خدمة كتابة الإجابة غير متاحة.",
+    chatError: "تعذّر الوصول إلى خدمة المحادثة. هل الخادم قيد التشغيل؟",
   },
 };
+
+// Backend HTTP errors arrive as English strings in `detail`. Map the known
+// ones to Arabic so a user in Arabic mode never sees an English error. Dynamic
+// messages (rate limit / lockout) are matched by prefix; anything unmapped
+// falls through to the raw text (still better than hiding it).
+const BACKEND_ERROR_AR = {
+  "Incorrect email or password.": "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+  "An account with that email already exists.": "يوجد حساب بهذا البريد الإلكتروني بالفعل.",
+  "Email not verified. Check your inbox for the code.":
+    "لم يتم التحقق من البريد الإلكتروني. تحقق من بريدك للحصول على الرمز.",
+  "No account found for that email.": "لا يوجد حساب بهذا البريد الإلكتروني.",
+  "Incorrect code.": "الرمز غير صحيح.",
+  "No pending reset for that email.": "لا يوجد طلب إعادة تعيين لهذا البريد.",
+  "No pending verification for that email.": "لا يوجد طلب تحقق لهذا البريد.",
+  "Code expired. Please sign up again.": "انتهت صلاحية الرمز. يرجى التسجيل مرة أخرى.",
+  "Code expired. Request a new one.": "انتهت صلاحية الرمز. اطلب رمزاً جديداً.",
+  "Username must be at least 2 characters.": "يجب ألا يقل اسم المستخدم عن حرفين.",
+  "Password must be at least 6 characters.": "يجب ألا تقل كلمة المرور عن 6 أحرف.",
+  "New password must be at least 6 characters.": "يجب ألا تقل كلمة المرور الجديدة عن 6 أحرف.",
+  "Invalid or expired token.": "الجلسة غير صالحة أو منتهية الصلاحية.",
+  "User not found.": "المستخدم غير موجود.",
+  "Message must not be empty.": "الرسالة يجب ألا تكون فارغة.",
+  "Query must not be empty.": "الاستعلام يجب ألا يكون فارغاً.",
+};
+
+function localizeError(msg, lang) {
+  if (lang !== "ar" || !msg) return msg;
+  if (BACKEND_ERROR_AR[msg]) return BACKEND_ERROR_AR[msg];
+  if (msg.startsWith("Too many failed attempts"))
+    return "محاولات فاشلة كثيرة جداً. تم قفل الحساب مؤقتاً — يرجى المحاولة لاحقاً.";
+  if (msg.startsWith("Too many requests"))
+    return "طلبات كثيرة جداً — يرجى الانتظار قليلاً ثم المحاولة مرة أخرى.";
+  return msg;
+}
 
 const LangContext = createContext({ lang: "en", t: TRANSLATIONS.en, dir: "ltr", toggleLang: () => {} });
 const useLang = () => useContext(LangContext);
@@ -728,7 +768,7 @@ function Login({ onAuthed, switchTo }) {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
   const submit = async () => {
     setErr("");
@@ -738,7 +778,7 @@ function Login({ onAuthed, switchTo }) {
       const r = await api("/auth/login", { email, password });
       onAuthed({ username: r.username, email: r.email, token: r.token });
     } catch (e) {
-      setErr(e.message);
+      setErr(localizeError(e.message, lang));
     } finally {
       setBusy(false);
     }
@@ -789,7 +829,7 @@ function Signup({ onAuthed, switchTo }) {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
   const submit = async () => {
     setErr("");
@@ -801,7 +841,7 @@ function Signup({ onAuthed, switchTo }) {
       const r = await api("/auth/signup", { username, email, password });
       onAuthed({ username: r.username, email: r.email, token: r.token });
     } catch (e) {
-      setErr(e.message);
+      setErr(localizeError(e.message, lang));
     } finally {
       setBusy(false);
     }
@@ -858,7 +898,7 @@ function Forgot({ switchTo }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [emailMode, setEmailMode] = useState("console");
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
   const send = async () => {
     setErr("");
@@ -869,7 +909,7 @@ function Forgot({ switchTo }) {
       setEmailMode(r.email_mode || "console");
       setStage("reset");
     } catch (e) {
-      setErr(e.message);
+      setErr(localizeError(e.message, lang));
     } finally {
       setBusy(false);
     }
@@ -883,7 +923,7 @@ function Forgot({ switchTo }) {
       await api("/auth/reset", { email, code: entered, new_password: pw });
       setStage("done");
     } catch (e) {
-      setErr(e.message);
+      setErr(localizeError(e.message, lang));
     } finally {
       setBusy(false);
     }
@@ -1016,7 +1056,7 @@ function Chat({ session, onHome, onSignOut }) {
         {
           who: "bot",
           kind: "empty",
-          text: `Couldn't reach the chat service: ${e.message}. Is the backend running at ${API_BASE}?`,
+          text: t.chatError,
         },
       ]);
     }
@@ -1114,7 +1154,7 @@ function Chat({ session, onHome, onSignOut }) {
             <button
               style={{ ...styles.sendBtn, opacity: input.trim() && !busy ? 1 : 0.5 }}
               onClick={send}
-              aria-label="Send"
+              aria-label={t.send}
               className="sendBtn"
             >
               <SendArc />
@@ -1158,6 +1198,41 @@ function FormattedReply({ text }) {
       })}
     </div>
   ));
+}
+
+// Copy the answer text to the clipboard — handy for pasting a resolution into
+// a ticket. Bilingual, with a brief "copied" confirmation.
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  const { lang } = useLang();
+  const label = lang === "ar" ? (copied ? "تم النسخ" : "نسخ") : copied ? "Copied" : "Copy";
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked (insecure context) — nothing useful to show */
+    }
+  };
+  return (
+    <button
+      onClick={copy}
+      style={{
+        background: "none",
+        border: `1px solid ${C.line}`,
+        borderRadius: 8,
+        cursor: "pointer",
+        fontSize: 12,
+        color: C.mute,
+        padding: "4px 8px",
+      }}
+      title={label}
+    >
+      {copied ? "✓ " : "⧉ "}
+      {label}
+    </button>
+  );
 }
 
 // Thumbs up/down on a grounded answer -> POST /feedback. Anonymous; fire and
@@ -1205,6 +1280,7 @@ function AnswerFeedback({ query, caseId }) {
 }
 
 function Message({ m }) {
+  const { t } = useLang();
   if (m.who === "user") {
     return (
       <div style={styles.rowRight}>
@@ -1229,8 +1305,11 @@ function Message({ m }) {
         <div style={styles.botBubble} className="pop">
           <FormattedReply text={m.text} />
           {m.grounded === false && (
-            <div style={styles.fallbackNote}>Answer-writing service unavailable.</div>
+            <div style={styles.fallbackNote}>{t.serviceUnavailable}</div>
           )}
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <CopyButton text={m.text} />
         </div>
         {m.hits && m.hits.length > 0 && (
           <AnswerFeedback query={m.query} caseId={m.hits[0]?.case_id} />

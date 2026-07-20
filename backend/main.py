@@ -50,7 +50,7 @@ from backend.auth import (
 from backend.db import Feedback, User, get_session, init_db
 from backend.email_utils import email_mode, send_code
 from backend.embedding_map import EmbeddingMap
-from backend.llm import generate_reply, translate_to_english
+from backend.llm import generate_reply, needs_translation, translate_to_english
 from backend.security import (
     check_lockout,
     rate_limit,
@@ -196,7 +196,7 @@ class ChatResponse(BaseModel):
 GOOD_MATCH_MAX_DISTANCE = 0.65
 
 
-def _fallback_reply(hits: list[dict]) -> str:
+def _fallback_reply(hits: list[dict], arabic: bool = False) -> str:
     """A deterministic, LLM-free reply for when Gemini is unavailable (no key,
     network down, or free-tier quota exhausted).
 
@@ -205,9 +205,25 @@ def _fallback_reply(hits: list[dict]) -> str:
     Problem / Resolution shape the model would produce) so the bot still
     answers. If nothing close was found -- which is also what a greeting or
     off-topic message looks like to retrieval -- give a warm nudge toward a
-    product question instead of an error.
+    product question instead of an error. Localised to Arabic when the user
+    wrote in Arabic, so the fallback never breaks the language.
     """
     grounding = [h for h in hits if h["distance"] <= GOOD_MATCH_MAX_DISTANCE]
+
+    if arabic:
+        if not grounding:
+            return (
+                "أنا هنا للمساعدة في دعم المنتجات. أخبرني بالجهاز وما الذي يحدث، "
+                "وسأبحث عن الحالة السابقة المطابقة وحلّها."
+            )
+        lines = ["إليك المشكلات والحلول التي وجدتها في الحالات السابقة:", ""]
+        for h in grounding[:3]:
+            lines.append(f"رقم الحالة: {h['case_id']}")
+            lines.append(f"المشكلة: {h['problem']}")
+            lines.append(f"الحل: {h['resolution']}")
+            lines.append("")
+        return "\n".join(lines).strip()
+
     if not grounding:
         return (
             "I'm here to help with product support. Tell me the device and what's "
@@ -256,14 +272,24 @@ def chat(req: ChatRequest, request: Request) -> dict:
         except Exception as exc:  # noqa: BLE001 -- never crash chat
             print(f"[chat] Gemini unavailable for product summary: {exc}")
             example = product_summary["example_problem"]
-            example_line = (
-                f" For example, one of the cases is: {example}." if example else ""
-            )
-            fallback = (
-                f"I found {product_summary['count']} past case(s) for "
-                f"{product_summary['product']}.{example_line} "
-                "What problem are you seeing? Describe it and I'll find the matching resolution."
-            )
+            if needs_translation(q):
+                example_line = (
+                    f" على سبيل المثال، إحدى الحالات: {example}." if example else ""
+                )
+                fallback = (
+                    f"وجدت {product_summary['count']} حالة سابقة لـ "
+                    f"{product_summary['product']}.{example_line} "
+                    "ما المشكلة التي تواجهها؟ صِفها وسأجد الحل المطابق."
+                )
+            else:
+                example_line = (
+                    f" For example, one of the cases is: {example}." if example else ""
+                )
+                fallback = (
+                    f"I found {product_summary['count']} past case(s) for "
+                    f"{product_summary['product']}.{example_line} "
+                    "What problem are you seeing? Describe it and I'll find the matching resolution."
+                )
             return {"reply": fallback, "hits": [], "grounded": False}
 
     hits = hybrid_search(search_query, _SETTINGS, top_k=5)
@@ -281,7 +307,11 @@ def chat(req: ChatRequest, request: Request) -> dict:
         return {"reply": reply, "hits": hits, "grounded": True}
     except Exception as exc:  # noqa: BLE001 -- deliberately broad: never crash chat
         print(f"[chat] Gemini unavailable, falling back to retrieval-only: {exc}")
-        return {"reply": _fallback_reply(hits), "hits": hits, "grounded": False}
+        return {
+            "reply": _fallback_reply(hits, arabic=needs_translation(q)),
+            "hits": hits,
+            "grounded": False,
+        }
 
 
 class EmbeddingMapRequest(BaseModel):

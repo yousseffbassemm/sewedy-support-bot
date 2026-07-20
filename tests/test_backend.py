@@ -130,6 +130,17 @@ def test_chat_rejects_empty_query(client):
     assert r.status_code == 400
 
 
+def test_chat_fallback_localized_to_arabic(client, monkeypatch):
+    # Arabic query + Gemini down -> the offline fallback must be Arabic, not English.
+    monkeypatch.setattr(main, "hybrid_search", lambda q, s, top_k=5: [])
+    monkeypatch.setattr(main, "generate_reply", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("429 quota")))
+    r = client.post("/chat", json={"query": "مرحبا كيف الحال"})
+    assert r.status_code == 200
+    reply = r.json()["reply"]
+    assert "couldn't reach" not in reply.lower()
+    assert "دعم المنتجات" in reply  # the Arabic product-support nudge
+
+
 def test_chat_accepts_conversation_history(client):
     r = client.post(
         "/chat",
