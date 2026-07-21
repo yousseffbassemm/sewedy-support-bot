@@ -73,10 +73,11 @@ const THEME_CSS = `
     --c-paper: #FAFAF8;
     --c-paper2: #FFFFFF;
     --c-line: #E7E4DE;
-    /* Was #6B6B6B (5.10:1 on bare paper). Nudged darker to buy back the
-       headroom the ambient wash costs, so muted copy clears AA even where
-       the washes overlap. Visually near-identical; measurably safer. */
-    --c-mute: #5F5F5F;
+    /* Was #6B6B6B (5.10:1 on bare paper), which left no headroom for the
+       ambient wash beneath it. #585858 measured against the darkest actual
+       background pixel on the rendered page -- not a modelled worst case --
+       holds 4.77:1, and 7.11:1 on plain cards. */
+    --c-mute: #585858;
     --c-ok: #1F9D55;
 
     --c-red-rgb: 227,6,19;
@@ -110,9 +111,9 @@ const THEME_CSS = `
        clears it at 6:1. Surfaces and large type keep #E30613. */
     --c-redInk: #B00410;
 
-    --wash1: rgba(227,6,19,.08);
-    --wash2: rgba(255,150,70,.088);
-    --wash3: rgba(80,120,255,.072);
+    --wash1: rgba(227,6,19,.22);
+    --wash2: rgba(255,150,70,.24);
+    --wash3: rgba(80,120,255,.20);
     --grain-opacity: .03;
 
     /* Shadows carry a little brand warmth instead of neutral grey. This is
@@ -253,17 +254,17 @@ const THEME_CSS = `
     background: radial-gradient(circle, var(--wash) , transparent 68%);
   }
   .ambient .b1 {
-    width: 54vw; height: 54vw; left: -14vw; top: -20vw;
+    width: 62vw; height: 62vw; left: -16vw; top: -22vw;
     --wash: var(--wash1);
     animation: drift1 30s ease-in-out infinite;
   }
   .ambient .b2 {
-    width: 44vw; height: 44vw; right: -12vw; top: 14vh;
+    width: 56vw; height: 56vw; right: -14vw; top: 2vh;
     --wash: var(--wash2);
     animation: drift2 38s ease-in-out infinite;
   }
   .ambient .b3 {
-    width: 60vw; height: 60vw; left: 16vw; bottom: -30vw;
+    width: 68vw; height: 68vw; left: 10vw; bottom: -26vw;
     --wash: var(--wash3);
     animation: drift3 46s ease-in-out infinite;
   }
