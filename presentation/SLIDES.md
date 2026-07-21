@@ -15,39 +15,50 @@ the code before presenting, re-run the commands in Appendix A and update them.
 
 ---
 
-## Screenshot shot list
+## Screenshots — all captured, in `presentation/screenshots/`
 
-Take these at **1440×900** in the browser, zoomed to 100%. On Windows,
-`Win + Shift + S` or the Snipping Tool is fine. For crisp slides, screenshot at
-the largest window you can — do not scale a small image up.
+Every image below is already taken at **2x resolution** and named for its slide.
+Drop `slide-09-*.png` on slide 9 and so on. Nothing here needs recapturing.
 
-Before you start: run the backend (`uv run uvicorn backend.main:app --port 8000`)
-and the frontend (`npm run dev` in `supportbot-ui`), then sign in.
-
-| File name | What to capture | How to get there |
+| File | Slide | What it shows |
 |---|---|---|
-| `slide-03-landing-hero-light.png` | Landing page top, light mode | Open the site. Wait ~4s so the preview chat animates in fully. |
-| `slide-04-architecture.png` | *Your own diagram* (see slide 4) | Draw in PowerPoint — no screenshot needed. |
-| `slide-05-ingest-terminal.png` | Terminal running ingestion | `uv run python -m rag.ingest` — capture the summary lines. |
-| `slide-06-index-terminal.png` | Terminal running indexing | `uv run python -m rag.index` — capture the summary. |
-| `slide-08-threshold-rejected.png` | Bot declining an off-domain question | Ask: `what is the capital of France` |
-| `slide-09-grounded-answer.png` | **The money shot** — a grounded answer citing a Case ID | Ask: `my ThermoNode T5 firmware update keeps failing halfway` |
-| `slide-10-followup-memory.png` | A follow-up that resolves a pronoun | After slide 9's question, ask: `does it happen on the FlowMeter X100 too` |
-| `slide-11-embedding-map.png` | The embedding visualisation panel | Under any answer, click **See how this was found**. Scroll so the whole plot is visible. |
-| `slide-12-small-talk.png` | Friendly redirect on chit-chat | Ask: `who is your favourite football player` |
-| `slide-13-offline-fallback.png` | Answer served with the LLM unavailable | Happens automatically once Gemini's daily quota is spent — look for *"Answer-writing service unavailable"* under the cases. |
-| `slide-14-auth-signin.png` | Sign-in screen | Sign out, click **Get started**. |
-| `slide-15-arabic-rtl.png` | Landing page in Arabic | Click **العربية**. Wait for the preview to animate. |
-| `slide-16-dark-mode.png` | Landing page in dark mode | Click the moon icon. |
-| `slide-17-mobile.png` | Mobile layout with the drawer open | F12 → device toolbar → iPhone 14 Pro. Tap the hamburger so the sidebar shows. |
-| `slide-18-eval-terminal.png` | Retrieval evaluation output | `uv run python -m eval.eval_retriever` — capture the **hybrid** block + the GATE PASS line. |
-| `slide-19-tests-ci.png` | Test suite passing | `uv run pytest -q` — capture `55 passed`. |
+| `slide-03-landing-hero-light.png` | 3 | Landing page, light mode, preview conversation animated in |
+| `slide-05-ingest-terminal.png` | 5 | Real `rag.ingest` output: 69 rows → 66 clean, 3 to review |
+| `slide-06-index-terminal.png` | 6 | Real `rag.index` output: 66 cases embedded, dim=384 |
+| `slide-08-threshold-rejected.png` | 8 | Bot refusing "what is the capital of France" |
+| `slide-09-grounded-answer.png` | 9 | **The money shot** — live answer citing Case ID 3008-2359 |
+| `slide-10-followup-memory.png` | 10 | Follow-up "does it happen on the FlowMeter X100 too" resolving the pronoun |
+| `slide-11-embedding-map.png` | 11 | Embedding plot open, with legend and caption |
+| `slide-12-small-talk.png` | 12 | Friendly redirect on chit-chat |
+| `slide-13-offline-fallback.png` | 13 | Cases still served with the LLM unavailable |
+| `slide-14-auth-signin.png` | 14 | Sign-in screen |
+| `slide-15-arabic-rtl.png` | 15 | Landing page in Arabic, full RTL |
+| `slide-16-dark-mode.png` | 16 | Landing page, dark mode |
+| `slide-16b-dark-chat.png` | 16 | Chat in dark mode (optional second image) |
+| `slide-17-mobile-landing.png` | 17 | Landing at 390px |
+| `slide-17b-mobile-drawer.png` | 17 | Mobile drawer open (optional second image) |
+| `slide-18-eval-terminal.png` | 18 | Real evaluation output: hybrid block + GATE PASS |
+| `slide-19-tests-terminal.png` | 19 | Real `pytest -q` output: 55 passed |
 
-> There are already-captured versions of several of these in
-> `presentation/screenshots/` from an automated run. Use them as reference for
-> framing, or replace them with your own — yours will be better for the chat
-> slides, because the automated run hit Gemini's daily quota and captured the
-> offline fallback instead of a live answer.
+**Only slide 4 needs you** — the architecture diagram, which you draw in
+PowerPoint from the ASCII flow on that slide.
+
+Two notes on how these were produced, in case you are asked:
+
+- The **web screenshots** are a real browser driven automatically, signed in as
+  your real account, holding a real conversation against the live backend. The
+  answers on slides 9 and 10 came from Gemini, not from a mock.
+- The **terminal images** (5, 6, 18, 19) are rendered from *real captured
+  output* — the commands were run and their stdout was drawn into a clean
+  terminal window so it stays readable when projected. Nothing was retyped or
+  edited beyond trimming to the relevant block. Re-generate them any time with
+  `python presentation/render_terminal.py`.
+
+To retake the web screenshots:
+
+```bash
+DECK_EMAIL=you@example.com DECK_PASSWORD=... node presentation/capture_screenshots.mjs
+```
 
 ---
 
@@ -324,7 +335,7 @@ cases_clean.jsonl  ──────────────→  review_queue.j
 
 ## Slide 16 — Design and accessibility
 
-**SCREENSHOT: `slide-16-dark-mode.png`**
+**SCREENSHOT: `slide-16-dark-mode.png`** (and `slide-16b-dark-chat.png` for the chat in dark)
 
 **On the slide**
 - Light and dark themes, switchable, remembered between visits
@@ -342,7 +353,7 @@ cases_clean.jsonl  ──────────────→  review_queue.j
 
 ## Slide 17 — Responsive [cut if short on time]
 
-**SCREENSHOT: `slide-17-mobile.png`**
+**SCREENSHOT: `slide-17-mobile-landing.png`** (and `slide-17b-mobile-drawer.png` if you want two)
 
 **On the slide**
 - Works on phones — the sidebar becomes a slide-in drawer
@@ -382,7 +393,7 @@ cases_clean.jsonl  ──────────────→  review_queue.j
 
 ## Slide 19 — Engineering quality
 
-**SCREENSHOT: `slide-19-tests-ci.png`**
+**SCREENSHOT: `slide-19-tests-terminal.png`**
 
 **On the slide**
 - **55 automated tests**, all passing — ingestion, retrieval, and the full API

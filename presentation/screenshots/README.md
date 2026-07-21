@@ -1,65 +1,62 @@
 # Screenshots
 
 Filenames map to slide numbers in `../SLIDES.md`. `slide-11-*.png` goes on slide 11.
+All images are 2x resolution so they stay sharp when projected.
 
-## Already captured — usable as-is
-
-| File | Slide | Note |
+| File | Slide | Shows |
 |---|---|---|
-| `slide-03-landing-hero-light.png` | 3 | Landing hero, light mode |
-| `slide-11-embedding-map.png` | 11 | Embedding plot is slightly cropped at the bottom — retake if you want the whole panel |
-| `slide-12-small-talk.png` | 12 | |
-| `slide-13-offline-fallback.png` | 13 | Genuine offline fallback (Gemini quota spent) — correct for this slide |
-| `slide-14-auth-signin.png` | 14 | |
-| `slide-15-arabic-rtl.png` | 15 | |
-| `slide-16-dark-mode.png` | 16 | |
-| `slide-17-mobile.png` | 17 | Landing at 390px, after the mobile header fix |
+| `slide-03-landing-hero-light.png` | 3 | Landing page, light mode |
+| `slide-05-ingest-terminal.png` | 5 | `rag.ingest` — 69 rows → 66 clean, 3 to review |
+| `slide-06-index-terminal.png` | 6 | `rag.index` — 66 cases embedded, dim=384 |
+| `slide-08-threshold-rejected.png` | 8 | Off-domain question refused |
+| `slide-09-grounded-answer.png` | 9 | Live grounded answer citing Case ID 3008-2359 |
+| `slide-10-followup-memory.png` | 10 | Follow-up resolving "it" to the previous topic |
+| `slide-11-embedding-map.png` | 11 | Embedding plot with legend |
+| `slide-12-small-talk.png` | 12 | Chit-chat redirected to product help |
+| `slide-13-offline-fallback.png` | 13 | Cases served with the LLM unavailable |
+| `slide-14-auth-signin.png` | 14 | Sign-in screen |
+| `slide-15-arabic-rtl.png` | 15 | Arabic, full RTL |
+| `slide-16-dark-mode.png` | 16 | Landing, dark mode |
+| `slide-16b-dark-chat.png` | 16 | Chat in dark mode (optional) |
+| `slide-17-mobile-landing.png` | 17 | Landing at 390px |
+| `slide-17b-mobile-drawer.png` | 17 | Mobile drawer open (optional) |
+| `slide-18-eval-terminal.png` | 18 | Evaluation output + GATE PASS |
+| `slide-19-tests-terminal.png` | 19 | `pytest -q` — 55 passed |
 
-## Still to capture
+Slide 4 (architecture) is the only one you draw yourself.
 
-| File | Slide | How |
-|---|---|---|
-| `slide-04-architecture.png` | 4 | Draw the diagram yourself in PowerPoint |
-| `slide-05-ingest-terminal.png` | 5 | `uv run python -m rag.ingest` |
-| `slide-06-index-terminal.png` | 6 | `uv run python -m rag.index` |
-| `slide-08-threshold-rejected.png` | 8 | Ask the bot `what is the capital of France` |
-| `slide-09-grounded-answer.png` | 9 | **Most important slide.** Needs Gemini quota available — see below |
-| `slide-10-followup-memory.png` | 10 | Same session as slide 9, then ask `does it happen on the FlowMeter X100 too` |
-| `slide-18-eval-terminal.png` | 18 | `uv run python -m eval.eval_retriever` — capture the **hybrid** block and the GATE line |
-| `slide-19-tests-ci.png` | 19 | `uv run pytest -q` |
+## How these were made
 
-## Important: slides 9 and 10 need Gemini quota
+**Web screenshots** — `../capture_screenshots.mjs` drives a real headless Edge
+over the DevTools Protocol: it logs in against the live API with your account,
+opens the chat, asks real questions and waits for real answers before capturing.
+Slides 9 and 10 are genuine Gemini responses.
 
-Gemini's free tier allows **20 requests per day**. That was spent during this
-session, so any chat screenshot taken now shows the offline fallback with
-*"Answer-writing service unavailable"* — which is correct for slide 13 but wrong
-for slide 9.
-
-The quota resets daily. Check it's back with:
+Static `--screenshot` captures could not be used: the landing preview stages its
+reveal through `requestAnimationFrame`, which does not advance under headless
+virtual-time, so the preview box renders empty.
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"query":"my ThermoNode T5 firmware update keeps failing halfway"}'
+DECK_EMAIL=you@example.com DECK_PASSWORD=... node ../capture_screenshots.mjs
+node ../capture_screenshots.mjs chat dark      # only matching steps
 ```
 
-If the response contains `"grounded":true`, the LLM is answering and you can take
-slides 9 and 10.
+Credentials are read from the environment and never written to disk.
 
-## reference/
-
-Extra captures not tied to a slide — spare framing options for the landing page,
-the empty chat state, and dark-mode chat. Use them if you want an extra visual.
-
-## Automated capture
-
-`../capture_screenshots.mjs` drives headless Edge over the DevTools Protocol and
-retakes all of these. Needs the backend on :8000 and the frontend on :5173:
+**Terminal images** (5, 6, 18, 19) — `../render_terminal.py` runs the real
+commands and draws their actual stdout into a clean terminal window. This beats
+photographing a console: consistent size, high resolution, no shell prompt or
+window chrome, readable from the back of a room. The text is real output, only
+trimmed to the relevant block.
 
 ```bash
-node presentation/capture_screenshots.mjs           # everything
-node presentation/capture_screenshots.mjs chat      # just the chat slides
+python ../render_terminal.py     # needs Pillow
 ```
 
-It logs a warning instead of saving slide 9 if it detects the offline fallback,
-so it will never pass a fallback screenshot off as a live answer.
+## Slide 13 was produced deliberately
+
+The offline fallback only appears when the LLM is unreachable. Rather than
+exhausting Gemini's 20-requests-per-day free tier to trigger it — which would
+have left nothing for a live demo — the backend was briefly restarted with the
+API key unset, the screenshot taken, and the key restored. The screenshot shows
+the real fallback path, not a mock.
