@@ -8,3 +8,8 @@ __pycache__/
 presentation/.edge-profile/
 # playwright-mcp scratch output
 .playwright-mcp/
+# Deck build artefacts: the mentor's template, the COM-built structure, and the
+# 20MB output. build_deck.py regenerates the deck from template + screenshots.
+presentation/template.pptx
+presentation/structure.pptx
+presentation/SupportBot.pptx

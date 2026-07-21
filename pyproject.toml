@@ -24,7 +24,11 @@ azure = ["openai>=1.40", "python-dotenv>=1.0"]
 ui = ["streamlit>=1.37"]
 
 [dependency-groups]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = [
+    "pytest>=8.0",
+    "python-pptx>=1.0.2",
+    "ruff>=0.6",
+]
 
 [tool.pytest.ini_options]
 # Put the repo root on sys.path so tests can import the `backend` package
