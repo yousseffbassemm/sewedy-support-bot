@@ -972,7 +972,7 @@ function Landing({ onStart, session }) {
   const { t, dir, toggleLang } = useLang();
   return (
     <div style={styles.landingWrap}>
-      <header style={styles.nav}>
+      <header style={styles.nav} className="siteNav">
         {/* A real button, not a decorative div: the hover state now implies
             it is clickable, so it needs to actually do something and be
             reachable by keyboard. */}
@@ -985,10 +985,10 @@ function Landing({ onStart, session }) {
         >
           <Logo height={30} />
         </button>
-        <nav style={styles.navLinks}>
-          <a style={styles.navLink} href="#how">{t.navHow}</a>
-          <a style={styles.navLink} href="#cases">{t.navCoverage}</a>
-          <button style={styles.langBtn} onClick={toggleLang}>{t.langToggle}</button>
+        <nav style={styles.navLinks} className="siteNavLinks">
+          <a style={styles.navLink} className="navLinkItem" href="#how">{t.navHow}</a>
+          <a style={styles.navLink} className="navLinkItem" href="#cases">{t.navCoverage}</a>
+          <button style={styles.langBtn} className="langBtnResponsive" onClick={toggleLang}>{t.langToggle}</button>
           <ThemeToggle />
           <button style={styles.navBtn} className="navBtn" onClick={onStart}>
             {session ? t.navContinue(session.username) : t.navSignIn}
@@ -1040,7 +1040,7 @@ function Landing({ onStart, session }) {
             <Arc width={110} />
           </div>
         </Reveal>
-        <div style={styles.steps}>
+        <div style={styles.steps} className="stepsGrid">
           {[
             [t.step1Title, t.step1Text],
             [t.step2Title, t.step2Text],
@@ -2328,6 +2328,51 @@ function GlobalStyle() {
         .h1Mobile { font-size: 40px !important; }
       }
 
+      /* Landing header on narrow screens.
+
+         The header had no mobile handling at all: the anchor links kept their
+         full width, so "How it works" wrapped onto two lines and collided with
+         the wordmark, and the sign-in button was pushed off-screen entirely.
+
+         The links are dropped rather than shrunk -- both scroll to sections the
+         user can reach anyway, and the hero already carries a "See how it works"
+         call to action. What has to survive at this width is the logo, the
+         language toggle, the theme toggle and sign-in. */
+      /* "How it works" was a hard repeat(3,1fr) with no breakpoint, so on a
+         phone three 26px-padded cards were crammed into the viewport and their
+         content pushed the whole page wider than the screen -- the page scrolled
+         sideways at 390px. Two columns on tablets, one on phones. */
+      @media (max-width: 900px) {
+        .stepsGrid { grid-template-columns: repeat(2, 1fr) !important; }
+      }
+      @media (max-width: 640px) {
+        .stepsGrid { grid-template-columns: 1fr !important; gap: 16px !important; }
+      }
+
+      /* Nothing may make the page scroll sideways on a phone. */
+      html, body { max-width: 100%; overflow-x: hidden; }
+
+      /* Arabic needs more leading than Latin at display sizes: the hero is set
+         at line-height 1.05, which is fine for Latin caps but lets tanween and
+         hamza on one line touch the baseline of the line above. Inline styles
+         set it, so this has to win with !important. */
+      .langAr h1 { line-height: 1.42 !important; }
+      .langAr h2 { line-height: 1.35 !important; }
+
+      @media (max-width: 760px) {
+        .navLinkItem { display: none !important; }
+        .siteNav { padding: 14px 0 !important; gap: 10px; }
+        .siteNavLinks { gap: 10px !important; }
+        .navBtn { padding: 8px 14px !important; font-size: 13px !important; }
+        .langBtnResponsive { padding: 7px 11px !important; font-size: 12px !important; }
+      }
+      /* Very narrow (small Androids, ~360px): the logo gives up width first so
+         the controls stay on one line. */
+      @media (max-width: 380px) {
+        .siteNav .logoWiggle img { height: 24px !important; }
+        .navBtn { padding: 7px 11px !important; }
+      }
+
       @media (max-width: 520px) {
         .h1Mobile { font-size: 33px !important; }
       }
@@ -2347,11 +2392,12 @@ const styles = {
     display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "22px 0",
   },
-  navLinks: { display: "flex", alignItems: "center", gap: 26 },
-  navLink: { color: C.ink, fontSize: 14, fontWeight: 500, opacity: 0.8 },
+  navLinks: { display: "flex", alignItems: "center", gap: 26, flexWrap: "nowrap", minWidth: 0 },
+  navLink: { color: C.ink, fontSize: 14, fontWeight: 500, opacity: 0.8, whiteSpace: "nowrap" },
   navBtn: {
     border: `1.5px solid ${C.ink}`, background: "transparent", color: C.ink,
     padding: "9px 18px", borderRadius: 999, fontSize: 14, fontWeight: 600,
+    whiteSpace: "nowrap", flexShrink: 0,
   },
   langBtn: {
     border: `1.5px solid ${C.line}`, background: "transparent", color: C.mute,

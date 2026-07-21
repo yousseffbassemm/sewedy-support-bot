@@ -13,7 +13,7 @@ Filenames map to slide numbers in `../SLIDES.md`. `slide-11-*.png` goes on slide
 | `slide-14-auth-signin.png` | 14 | |
 | `slide-15-arabic-rtl.png` | 15 | |
 | `slide-16-dark-mode.png` | 16 | |
-| `slide-17-mobile.png` | 17 | Drawer is closed — reshoot with the hamburger open if you want to show it |
+| `slide-17-mobile.png` | 17 | Landing at 390px, after the mobile header fix |
 
 ## Still to capture
 
