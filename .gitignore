@@ -6,3 +6,5 @@ __pycache__/
 .pytest_cache/
 # screenshot harness browser profile
 presentation/.edge-profile/
+# playwright-mcp scratch output
+.playwright-mcp/

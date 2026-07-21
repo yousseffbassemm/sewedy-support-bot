@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Elsewedy SupportBot</title>
+    <!--
+      Runs before first paint so a dark-mode user never sees a white flash.
+      React's effect sets the same attribute a moment later; this only removes
+      the gap. Must stay in sync with initialTheme() in App.jsx -- same storage
+      key, same JSON encoding (writeStored uses JSON.stringify), same OS
+      fallback. Inline and blocking on purpose: deferring it reintroduces the
+      flash it exists to prevent.
+    -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem("supportbot.theme");
+          var stored = raw ? JSON.parse(raw) : null;
+          var theme =
+            stored === "dark" || stored === "light"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          document.documentElement.setAttribute("data-theme", theme);
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      })();
+    </script>
+    <style>
+      /* The stylesheet lives inside the React tree, so the page background is
+         unstyled until hydration -- this bridges that window. */
+      html[data-theme="dark"], html[data-theme="dark"] body { background: #131211; }
+      html[data-theme="light"], html[data-theme="light"] body { background: #FAFAF8; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

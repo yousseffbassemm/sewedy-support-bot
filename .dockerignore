@@ -10,4 +10,9 @@ backend/.env
 backend/data/
 .hf_cache/
 node_modules/
+# The backend image never builds the UI, and a bare `node_modules/` only
+# matches at the context root -- without this, supportbot-ui/node_modules
+# (~81MB) is still shipped to the daemon on every build.
+**/node_modules/
+supportbot-ui/dist/
 *.md

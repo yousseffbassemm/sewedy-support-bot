@@ -40,7 +40,10 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC = ROOT.parent / "supportbot-ui" / "public"
+# supportbot-ui now lives INSIDE the repo. It used to sit alongside it, which
+# is why this was ROOT.parent -- a path that only resolved on the one machine
+# where the checkout happened to have the UI as its sibling.
+PUBLIC = ROOT / "supportbot-ui" / "public"
 SRC = PUBLIC / "logo.png"
 DST = PUBLIC / "logo-dark.png"
 

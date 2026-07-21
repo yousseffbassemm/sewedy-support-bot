@@ -31,9 +31,9 @@ whether continued extension or consolidating/presenting what exists is the bette
   - Feedback loop: 👍/👎 on answers → `POST /feedback` → `Feedback` table; `GET /feedback/stats`.
   - Tests + CI: `tests/test_backend.py` (FastAPI TestClient, mocked model/LLM); GitHub Actions runs the
     suite + the retriever eval gate on push. `Dockerfile`/`docker-compose.yml` package the backend.
-  - The tracked repo `App.jsx` is now synced to the real running frontend (`supportbot-ui/src/App.jsx`);
-    they had drifted (1141 vs 1835 lines). NOTE: `supportbot-ui/` is still a separate, un-versioned
-    project — the only remaining source-of-truth gap.
+  - ~~The tracked repo `App.jsx` is synced to the real running frontend; `supportbot-ui/` is still a
+    separate, un-versioned project~~ — CLOSED. `supportbot-ui/` now lives INSIDE the repo and is the
+    single source of truth; there is no second copy to drift. See "Frontend" under Repo.
 
 ## Key numbers (current corpus)
 
@@ -145,8 +145,8 @@ whether continued extension or consolidating/presenting what exists is the bette
   English by design; in the *offline* fallback the case Problem/Resolution text stays English (the live
   Gemini path translates it). Backend error messages, the fallback bot text, and all UI chrome ARE now
   Arabic.
-- Frontend Docker + full-stack `compose` (backend is containerized; `supportbot-ui` is not, since it lives
-  outside this repo).
+- Frontend Docker + full-stack `compose` (backend is containerized; `supportbot-ui` is not). The old
+  blocker — the UI living outside the repo — is gone, so this is now just unwritten, not impossible.
 
 ## Repo
 
@@ -154,5 +154,16 @@ whether continued extension or consolidating/presenting what exists is the bette
 - Branch: `main` (all productionization work is committed here).
 - Local project name (`pyproject.toml`): `intern-rag`
 - Importable package: `rag` (in `src/rag/`)
-- Frontend: separate Vite project (`supportbot-ui`); the tracked repo `App.jsx` is kept in sync with
-  `supportbot-ui/src/App.jsx` (the copy that actually runs).
+- Frontend: `supportbot-ui/` — a real Vite project **inside this repo**, React 19 + Vite 8.
+  `cd supportbot-ui && npm install && npm run dev` (port 5173; the backend CORS allowlist names that
+  exact origin). There is no longer a root `App.jsx`: it moved to `supportbot-ui/src/App.jsx`, which is
+  now the only copy. `logo.png`/`logo-dark.png` moved to `supportbot-ui/public/`.
+  - HISTORY (so the old layout isn't reintroduced): the UI used to live at `C:\Users\DELL\supportbot-ui`,
+    a *sibling* of the repo, with only `App.jsx` copied in and hand-synced. Nothing else — `index.html`,
+    `main.jsx`, `index.css`, `package.json`, the logos' generator path — was versioned, so a fresh clone
+    could not run the frontend at all. `tools/make_dark_logo.py` still pointed at `ROOT.parent`, a path
+    that only resolved on the one machine with that sibling layout; it now points at `ROOT`.
+  - Deliberately NOT carried over from the old project: `src/App.css`, `src/assets/` (hero.png, react.svg,
+    vite.svg) and `public/icons.svg` — all verified unreferenced Vite-template leftovers.
+  - `index.html` holds the pre-paint theme script; its bootstrap background values (`#FAFAF8` light,
+    `#131211` dark) must match `--c-paper` in each theme in `App.jsx`.
