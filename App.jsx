@@ -122,7 +122,7 @@ const THEME_CSS = `
        from "warm paper" into "colourful", more than the intensity did. */
     --wash1: rgba(227,6,19,.085);
     --wash2: rgba(255,150,70,.075);
-    --wash3: rgba(120,140,190,.035);
+    --wash3: rgba(215,175,150,.045);
     --grain-opacity: .03;
 
     /* Shadows carry a little brand warmth instead of neutral grey. This is
@@ -168,7 +168,11 @@ const THEME_CSS = `
 
     --wash1: rgba(var(--c-red-rgb),.22);
     --wash2: rgba(255,140,60,.10);
-    --wash3: rgba(70,110,255,.10);
+    /* Was a blue (70,110,255). Kept as a wash rather than removed -- dropping
+       it flattens the bottom third of the page -- but shifted to a warm
+       neutral so the palette stays red/amber on warm near-black instead of
+       drifting cool at the bottom. */
+    --wash3: rgba(255,190,150,.075);
     --grain-opacity: .05;
 
     --shadow-tint: 0,0,0;
