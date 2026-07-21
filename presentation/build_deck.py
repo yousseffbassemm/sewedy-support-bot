@@ -220,48 +220,103 @@ def build() -> None:
     )
     add_image(s[2], "slide-03-landing-hero-light.png")
 
-    # 4 -- the answer --------------------------------------------------------
+    # 4 -- citation ----------------------------------------------------------
     set_lines(by_name(s[3], "TextBox 6"), ["Cited answers"])
     add_body(
         s[3],
         [
             "Every answer names the exact past case behind it — Case ID, the "
             "original problem, and its resolution.",
-            "Follow-up questions work: the chat remembers what was already "
-            "asked.",
-            "Answers can be copied, or rated helpful or not helpful.",
-            "“See how this was found” reveals the search space behind the "
-            "answer — each point a past case, the highlighted ones the match.",
+            "The fix shown is the fix that was actually recorded, not a "
+            "paraphrase of it.",
+            "Answers can be copied, or rated helpful or not helpful to flag "
+            "where the knowledge base needs a better case.",
         ],
-        size=Pt(30),
     )
-    # This one screenshot carries both features: a cited answer AND the
-    # expanded map underneath it.
-    add_image(s[3], "slide-11-embedding-map.png")
+    add_image(s[3], "slide-09-grounded-answer.png")
 
-    # 5 -- guardrails --------------------------------------------------------
-    set_lines(by_name(s[4], "TextBox 6"), ["Knows its limits"])
+    # 5 -- conversation memory -----------------------------------------------
+    set_lines(by_name(s[4], "TextBox 6"), ["It remembers"])
     add_body(
         s[4],
         [
-            "If nothing in the knowledge base actually matches, it says so "
-            "instead of guessing an answer.",
-            "Greetings and off-topic questions get a natural reply — never an "
-            "invented case.",
-            "If the AI service is unavailable, it still returns the matching "
-            "cases rather than an error.",
+            "Follow-up questions work: “does it happen on the FlowMeter X100 "
+            "too” is understood in the context of what came before.",
+            "The thread is kept, so an engineer never has to restate the "
+            "problem.",
+            "Every reply is still grounded in its own cited case.",
         ],
     )
-    add_image(s[4], "slide-08-threshold-rejected.png")
+    add_image(s[4], "slide-10-followup-memory.png")
 
-    # 6 -- separator 02 ------------------------------------------------------
-    set_number(by_name(s[5], "TextBox 8"), "02")
-    set_lines(by_name(s[5], "TextBox 7"), ["The Experience"])
-
-    # 7 -- bilingual ---------------------------------------------------------
-    set_lines(by_name(s[6], "TextBox 6"), ["Fully bilingual"])
+    # 6 -- explainability ----------------------------------------------------
+    set_lines(by_name(s[5], "TextBox 6"), ["Shows its work"])
     add_body(
-        s[6],
+        s[5],
+        [
+            "“See how this was found” reveals the search space behind the "
+            "answer.",
+            "Each point is a past case; the highlighted ones are what the "
+            "question actually matched.",
+            "Engineers can see why an answer was chosen — not just be asked to "
+            "trust it.",
+        ],
+    )
+    add_image(s[5], "slide-11-embedding-map.png")
+
+    # 7 -- separator 02 ------------------------------------------------------
+    set_number(by_name(s[6], "TextBox 8"), "02")
+    set_lines(by_name(s[6], "TextBox 7"), ["Trust"])
+
+    # 8 -- scope -------------------------------------------------------------
+    set_lines(by_name(s[7], "TextBox 6"), ["Stays in scope"])
+    add_body(
+        s[7],
+        [
+            "General-knowledge questions are declined — this is a product "
+            "support tool, not a general chatbot.",
+            "If nothing in the knowledge base matches, it says so instead of "
+            "guessing an answer.",
+            "An unrelated case is never dressed up as a resolution.",
+        ],
+    )
+    add_image(s[7], "slide-08-threshold-rejected.png")
+
+    # 9 -- small talk --------------------------------------------------------
+    set_lines(by_name(s[8], "TextBox 6"), ["Small talk"])
+    add_body(
+        s[8],
+        [
+            "Greetings and casual questions get a warm, natural reply.",
+            "It answers, then steers back to what it can actually help with.",
+            "Small talk never produces a fabricated Case ID — the citation "
+            "format appears only when there is a real case behind it.",
+        ],
+    )
+    add_image(s[8], "slide-12-small-talk.png")
+
+    # 10 -- graceful degradation ---------------------------------------------
+    set_lines(by_name(s[9], "TextBox 6"), ["Always answers"])
+    add_body(
+        s[9],
+        [
+            "If the answer-writing service is unavailable, the matching cases "
+            "are still listed in full.",
+            "The engineer still gets Case ID, problem and resolution — only "
+            "the written summary is missing, and it says so.",
+            "It degrades gracefully rather than showing an error screen.",
+        ],
+    )
+    add_image(s[9], "slide-13-offline-fallback.png")
+
+    # 11 -- separator 03 -----------------------------------------------------
+    set_number(by_name(s[10], "TextBox 8"), "03")
+    set_lines(by_name(s[10], "TextBox 7"), ["The Experience"])
+
+    # 12 -- bilingual --------------------------------------------------------
+    set_lines(by_name(s[11], "TextBox 6"), ["Fully bilingual"])
+    add_body(
+        s[11],
         [
             "One toggle switches the entire interface between English and "
             "Arabic — including a true right-to-left layout.",
@@ -270,12 +325,12 @@ def build() -> None:
             "fallback.",
         ],
     )
-    add_image(s[6], "slide-15-arabic-rtl.png")
+    add_image(s[11], "slide-15-arabic-rtl.png")
 
-    # 8 -- theming + responsive ----------------------------------------------
-    set_lines(by_name(s[7], "TextBox 6"), ["Light and dark"])
+    # 13 -- theming + responsive ---------------------------------------------
+    set_lines(by_name(s[12], "TextBox 6"), ["Light and dark"])
     add_body(
-        s[7],
+        s[12],
         [
             "One click re-themes the whole application; it follows the "
             "operating system by default and remembers an explicit choice.",
@@ -288,16 +343,16 @@ def build() -> None:
         ],
         size=Pt(30),
     )
-    add_image(s[7], "slide-16-dark-mode.png", top=Inches(3.2), max_w=Inches(10.4))
+    add_image(s[12], "slide-16-dark-mode.png", top=Inches(3.2), max_w=Inches(10.4))
     add_image(
-        s[7], "slide-17b-mobile-drawer.png",
+        s[12], "slide-17b-mobile-drawer.png",
         left=Inches(23.2), top=Inches(3.2), max_w=Inches(3.0),
     )
 
-    # 9 -- accounts ----------------------------------------------------------
-    set_lines(by_name(s[8], "TextBox 6"), ["Your account"])
+    # 14 -- accounts ---------------------------------------------------------
+    set_lines(by_name(s[13], "TextBox 6"), ["Your account"])
     add_body(
-        s[8],
+        s[13],
         [
             "Engineers create an account and stay signed in — a refresh never "
             "signs you out mid-job.",
@@ -305,17 +360,17 @@ def build() -> None:
             "Sign-in is protected against repeated password guessing.",
         ],
     )
-    add_image(s[8], "slide-14-auth-signin.png")
+    add_image(s[13], "slide-14-auth-signin.png")
 
-    # 10 -- thank you --------------------------------------------------------
-    set_lines(by_name(s[9], "TextBox 17"), ["Thank you"])
+    # 15 -- thank you --------------------------------------------------------
+    set_lines(by_name(s[14], "TextBox 17"), ["Thank you"])
 
     # transitions ------------------------------------------------------------
     # Fade throughout, with a push on the two section separators so a section
     # change reads as a change. Deliberately restrained: this is a template
     # deck, not a showreel.
     for i, slide in enumerate(s, start=1):
-        set_transition(slide, "push" if i in (2, 6) else "fade")
+        set_transition(slide, "push" if i in (2, 7, 11) else "fade")
 
     prs.save(OUT)
     print(f"[deck] wrote {OUT}  ({len(s.__iter__.__self__._sldIdLst)} slides)")

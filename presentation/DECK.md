@@ -23,11 +23,12 @@ All three are git-ignored (~50MB combined); `build_deck.py` and the screenshots
 are the tracked source of truth.
 
 To rebuild `structure.pptx` from scratch, see the COM snippet in the project
-history — it duplicates template slides in the order `1,3,2,2,2,3,2,2,2,4`
-(cover, separator, white ×3, separator, white ×3, thank-you) and deletes the
-four originals. **If you change the running order, update both that array and
-the separator indices in `set_transition` at the bottom of `build_deck.py`** —
-they are the same two positions and will silently disagree otherwise.
+history — it duplicates template slides in the order
+`1,3,2,2,2,2,3,2,2,2,3,2,2,2,4` (cover, separator, white ×4, separator,
+white ×3, separator, white ×3, thank-you) and deletes the four originals.
+**If you change the running order, update both that array and the separator
+indices in `set_transition` at the bottom of `build_deck.py`** — they are the
+same positions (currently 2, 7, 11) and will silently disagree otherwise.
 
 ## The template rule
 
@@ -55,21 +56,35 @@ clear of the template's graphics:
 Hence `BODY_LEFT=2.6in`, `IMG_TOP=3.0in`, `IMG_BOTTOM_LIMIT=11.4in`,
 `IMG_RIGHT_LIMIT=26.6in`.
 
-## Feature coverage
+## Running order (15 slides, 3 sections)
 
-Ten slides is a hard cap, so features are *stated* in the body copy even where
-there is no room to show them. Across slides 3, 4, 5, 7, 8 and 9 the deck names:
-plain-language search, 66 resolved cases, suggested questions, Case ID
-citation, conversation memory, copy, helpful/not-helpful rating, "see how this
-was found", the no-match refusal, off-topic handling, the offline fallback,
-English/Arabic with RTL, the Arabic typeface, light/dark theming, OS default +
-remembered choice, contrast checking, phone width + drawer, keyboard focus,
-accounts, session persistence, password reset by email code, and sign-in
-throttling.
+| # | Slide | Screenshot |
+|---|---|---|
+| 1 | SupportBot (cover) | — |
+| 2 | **01 · The Product** | — |
+| 3 | Find the fix | landing hero |
+| 4 | Cited answers | grounded answer |
+| 5 | It remembers | follow-up memory |
+| 6 | Shows its work | embedding map |
+| 7 | **02 · Trust** | — |
+| 8 | Stays in scope | out-of-scope refusal |
+| 9 | Small talk | small talk |
+| 10 | Always answers | offline fallback |
+| 11 | **03 · The Experience** | — |
+| 12 | Fully bilingual | Arabic RTL |
+| 13 | Light and dark | dark mode + mobile drawer |
+| 14 | Your account | sign-in |
+| 15 | Thank you | — |
 
-Slide 4 uses the embedding-map screenshot deliberately: that one image shows a
-cited answer *and* the expanded map, covering two features in one visual and
-freeing a slide for accounts.
+Every non-terminal screenshot is used except `slide-16b-dark-chat.png` and
+`slide-17-mobile-landing.png` (near-duplicates of ones already shown) and the
+four terminal captures, which are backend and deliberately out of scope.
+
+Each screenshot is matched to what it actually contains — worth checking before
+relabelling a slide. `slide-08-threshold-rejected.png` is the *out-of-scope*
+refusal ("what is the capital of France"), not a no-match case;
+`slide-12-small-talk.png` is the football question. They are different
+guardrails and get their own slides.
 
 ### Title length is a hard constraint
 
