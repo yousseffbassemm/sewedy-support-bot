@@ -4,3 +4,5 @@ data/chroma/
 __pycache__/
 *.pyc
 .pytest_cache/
+# screenshot harness browser profile
+presentation/.edge-profile/
