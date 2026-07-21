@@ -20,6 +20,7 @@ Run:
 from __future__ import annotations
 
 import copy
+import sys
 from pathlib import Path
 
 from PIL import Image
@@ -30,7 +31,9 @@ from lxml import etree
 
 ROOT = Path(__file__).resolve().parent
 STRUCTURE = ROOT / "structure.pptx"
-OUT = ROOT / "SupportBot.pptx"
+# Optional CLI override, so a draft can be built and inspected while the real
+# deck is open in PowerPoint (which holds an exclusive lock on it).
+OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "SupportBot.pptx"
 SHOTS = ROOT / "screenshots"
 
 # --- template geometry ------------------------------------------------------
@@ -213,10 +216,13 @@ def build() -> None:
         [
             "Engineers describe a problem the way they'd say it out loud — no "
             "error codes, no lookup tables.",
-            "SupportBot searches 66 resolved support cases by meaning rather "
-            "than by keyword.",
+            "SupportBot searches 66 resolved cases spanning 7 products and 8 "
+            "issue categories, by meaning rather than by keyword.",
+            "Type only a product name and it reports how many past cases exist "
+            "for it, with an example to start from.",
             "Suggested questions get you started in a single click.",
         ],
+        size=Pt(30),
     )
     add_image(s[2], "slide-03-landing-hero-light.png")
 
@@ -319,7 +325,8 @@ def build() -> None:
         s[11],
         [
             "One toggle switches the entire interface between English and "
-            "Arabic — including a true right-to-left layout.",
+            "Arabic — including a true right-to-left layout — and the choice "
+            "is remembered next time.",
             "Ask a question in Arabic and the answer comes back in Arabic.",
             "Arabic is set in a dedicated typeface, not left to a browser "
             "fallback.",
@@ -338,8 +345,8 @@ def build() -> None:
             "accessibility in both themes.",
             "The full experience works down to phone width, where the sidebar "
             "becomes a slide-in drawer.",
-            "Keyboard focus is visible throughout, for anyone not using a "
-            "mouse.",
+            "Keyboard focus is visible throughout, and animation is reduced "
+            "for anyone whose system asks for that.",
         ],
         size=Pt(30),
     )

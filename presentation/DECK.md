@@ -6,8 +6,15 @@ after any copy or screenshot change.
 ## Rebuild
 
 ```bash
-uv run python presentation/build_deck.py     # -> presentation/SupportBot.pptx
+uv run python presentation/build_deck.py                  # -> presentation/SupportBot.pptx
+uv run python presentation/build_deck.py /tmp/draft.pptx  # draft, to a different path
 ```
+
+The optional output path exists because PowerPoint holds an **exclusive lock**
+on an open file: rebuilding while the deck is open fails with `PermissionError`.
+Build a draft elsewhere, review it, then write the real file once PowerPoint is
+closed. Never kill the PowerPoint process to break the lock — it may be someone
+looking at the deck.
 
 That reads `presentation/structure.pptx` + `presentation/screenshots/*.png`.
 
@@ -75,6 +82,25 @@ Hence `BODY_LEFT=2.6in`, `IMG_TOP=3.0in`, `IMG_BOTTOM_LIMIT=11.4in`,
 | 13 | Light and dark | dark mode + mobile drawer |
 | 14 | Your account | sign-in |
 | 15 | Thank you | — |
+
+**Feature audit.** The body copy names, across slides 3-14: plain-language
+search, 66 cases over 7 products and 8 issue categories, the product-name
+overview query, suggested questions, Case ID citation, verbatim resolutions,
+copy, helpful/not-helpful rating, conversation memory, "see how this was
+found", out-of-scope refusal, no-match refusal, small talk without fabricated
+citations, the offline fallback, English/Arabic with RTL and a remembered
+language choice, the Arabic typeface, theming with OS default and remembered
+choice, contrast checking, phone width with drawer, keyboard focus, reduced
+motion, accounts, session persistence, password reset by emailed code, and
+sign-in throttling.
+
+Deliberately excluded as chrome rather than features: the Live pill, sign-out,
+the empty-state watermark, copy confirmation, the theme-transition animation,
+and the three-step "How it works" explainer (already visible in the slide-3
+screenshot). Deliberately excluded as backend: hybrid BM25 + semantic search,
+the ingestion quality gate, the grounding-distance threshold, the eval harness,
+tests/CI and Docker — their user-visible effects are stated, the machinery is
+not.
 
 Every non-terminal screenshot is used except `slide-16b-dark-chat.png` and
 `slide-17-mobile-landing.png` (near-duplicates of ones already shown) and the
