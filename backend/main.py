@@ -5,7 +5,7 @@ Endpoints:
   GET  /health                 -> liveness + email mode
   POST /search                 -> real semantic search (MiniLM + ChromaDB), no LLM
   POST /chat                   -> retrieval + Gemini-written grounded reply
-  POST /auth/signup            -> create account (no email verification)
+  POST /auth/signup            -> create account, return token (no verification)
   POST /auth/login             -> check password, return token
   POST /auth/forgot            -> email a reset code
   POST /auth/reset             -> confirm code + set new password
@@ -415,11 +415,6 @@ class SignupRequest(BaseModel):
     password: str
 
 
-class VerifyRequest(BaseModel):
-    email: EmailStr
-    code: str
-
-
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -445,8 +440,19 @@ def _get_user(session: Session, email: str) -> User | None:
     return session.exec(select(User).where(User.email == email.lower())).first()
 
 
-@app.post("/auth/signup")
+@app.post("/auth/signup", response_model=AuthResponse)
 def signup(req: SignupRequest, request: Request, session: Session = Depends(get_session)) -> dict:
+    """Create an account and sign the user straight in.
+
+    Email verification was deliberately cut from this path: it gated the very
+    first thing a new user does behind an inbox round-trip, and a support tool
+    used inside the company doesn't need it. The account is therefore created
+    already verified and we return the same {token, username, email} shape as
+    /auth/login, so the client can drop the user into the app immediately.
+
+    Verification codes still exist -- but only for the password-reset flow,
+    which IS security-critical (see /auth/forgot).
+    """
     rate_limit(request, "signup", max_requests=5, window_seconds=60)
     if len(req.username.strip()) < 2:
         raise HTTPException(400, "Username must be at least 2 characters.")
@@ -458,52 +464,28 @@ def signup(req: SignupRequest, request: Request, session: Session = Depends(get_
     if existing and existing.is_verified:
         raise HTTPException(409, "An account with that email already exists.")
 
-    code = _gen_code()
-    expires = datetime.utcnow() + timedelta(minutes=_CODE_TTL_MIN)
-
-    if existing and not existing.is_verified:
-        # Re-signup on an unverified account: refresh details + code.
+    if existing:
+        # An UNVERIFIED row can only be legacy data, from back when signup
+        # required a code that the UI never collected -- those accounts could
+        # never log in. Let a re-signup reclaim and repair the account rather
+        # than leaving the address permanently unusable.
         existing.username = req.username.strip()
         existing.password_hash = hash_password(req.password)
-        existing.pending_code = code
-        existing.pending_kind = "verify"
-        existing.pending_expires = expires
-        session.add(existing)
+        existing.is_verified = True
+        existing.pending_code = None
+        existing.pending_kind = None
+        existing.pending_expires = None
+        user = existing
     else:
         user = User(
             email=email,
             username=req.username.strip(),
             password_hash=hash_password(req.password),
-            is_verified=False,
-            pending_code=code,
-            pending_kind="verify",
-            pending_expires=expires,
+            is_verified=True,
         )
-        session.add(user)
 
-    session.commit()
-    send_code(email, code, "verify")
-    return {"ok": True, "message": "Verification code sent.", "email_mode": email_mode()}
-
-
-@app.post("/auth/verify", response_model=AuthResponse)
-def verify(req: VerifyRequest, request: Request, session: Session = Depends(get_session)) -> dict:
-    rate_limit(request, "verify", max_requests=10, window_seconds=60)
-    user = _get_user(session, req.email)
-    if not user or user.pending_kind != "verify":
-        raise HTTPException(400, "No pending verification for that email.")
-    if user.pending_expires and datetime.utcnow() > user.pending_expires:
-        raise HTTPException(400, "Code expired. Please sign up again.")
-    if req.code != user.pending_code:
-        raise HTTPException(400, "Incorrect code.")
-
-    user.is_verified = True
-    user.pending_code = None
-    user.pending_kind = None
-    user.pending_expires = None
     session.add(user)
     session.commit()
-
     return {"token": create_token(user.email), "username": user.username, "email": user.email}
 
 

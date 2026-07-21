@@ -46,7 +46,7 @@ whether continued extension or consolidating/presenting what exists is the bette
 - Embedding provider: `local` (MiniLM, `all-MiniLM-L6-v2`), 384-dim
 - Vector store: ChromaDB, persistent, `data/chroma/`, collection `support_cases`
 - Answer generation: Gemini (`gemini-2.5-flash`), thinking disabled, grounding threshold 0.65 cosine distance
-- Tests: 50/50 passing (`test_ingest.py` + `test_retrieve.py` + `test_backend.py`)
+- Tests: 58/58 passing (`test_ingest.py` + `test_retrieve.py` + `test_backend.py`)
 - Retriever eval (`eval/eval_set_public.json`, 15 queries): hybrid engine 100% Hit@1 on identifier
   and paraphrase queries, 100% out-of-domain rejection, MRR@5 = 1.000. Run: `uv run python -m eval.eval_retriever`.
 
@@ -70,7 +70,16 @@ whether continued extension or consolidating/presenting what exists is the bette
   review instead of indexed. This design choice is what surfaced the data gaps above instead of hiding them.
 - Chose **Gemini** (not Claude/OpenAI) for answer generation, on request. Free tier available.
 - Auth is real (bcrypt + JWT + SQLite) but explicitly not hardened for production — see `DESIGN.md` §8.
-- Signup no longer requires email verification (cut on request); forgot-password still does, since that's
+- Signup no longer requires email verification (cut on request) — this is now TRUE of the backend, not just
+  the frontend. `/auth/signup` creates the account already verified and returns `{token, username, email}`,
+  the same shape as `/auth/login`. The `/auth/verify` endpoint is gone; `is_verified` and the login gate
+  stay, so a legacy unverified row is still blocked, and a re-signup on that address reclaims it.
+  (Was broken: the frontend read `r.token` from a response that only carried `{ok, message, email_mode}`,
+  and every account signup created was unverified — so it could never log in. `tests/test_backend.py` now
+  has a signup→login round-trip guard; the old suite missed this because every login test seeded a
+  pre-verified user instead of one signup actually created.)
+- Signup no longer sends an email at all, which also takes a ~3s blocking SMTP call out of the request path.
+  Forgot-password still emails a code, since that's
   the security-critical path.
 - Added a **code-level distance threshold** (not just prompt instructions) to stop the LLM from grounding
   answers in irrelevant or wrong-problem cases — see `DESIGN.md` §12 for the two real failure modes this

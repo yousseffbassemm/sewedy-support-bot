@@ -158,10 +158,51 @@ def test_chat_accepts_conversation_history(client):
 
 # --- auth -------------------------------------------------------------------
 
-def test_signup_ok(client):
+def test_signup_returns_a_usable_session(client):
+    """Signup must return the same {token, username, email} shape as login.
+
+    The frontend reads exactly these three fields and drops the user straight
+    into the app. When signup returned {ok, message, email_mode} instead, every
+    field the client read was undefined.
+    """
     r = client.post("/auth/signup", json={"username": "Youssef", "email": "new@elsewedy.com", "password": "secret1"})
     assert r.status_code == 200
-    assert r.json()["ok"] is True
+    body = r.json()
+    assert body["token"]
+    assert body["username"] == "Youssef"
+    assert body["email"] == "new@elsewedy.com"
+
+
+def test_signup_then_login_round_trip(client):
+    """The regression guard: an account created through signup must be able to
+    log in afterwards. Signup used to create the user UNVERIFIED while login
+    rejected unverified accounts, so every account made through the UI was
+    permanently locked out -- and no test caught it, because the login tests
+    all used a pre-seeded verified user instead of one signup actually made.
+    """
+    creds = {"username": "Roundtrip", "email": "round@elsewedy.com", "password": "secret1"}
+    assert client.post("/auth/signup", json=creds).status_code == 200
+
+    r = client.post("/auth/login", json={"email": creds["email"], "password": creds["password"]})
+    assert r.status_code == 200, r.json()
+    assert r.json()["token"]
+
+
+def test_signup_duplicate_email_rejected(client):
+    creds = {"username": "First", "email": "dupe@elsewedy.com", "password": "secret1"}
+    assert client.post("/auth/signup", json=creds).status_code == 200
+    assert client.post("/auth/signup", json=creds).status_code == 409
+
+
+def test_signup_reclaims_legacy_unverified_account(client, engine):
+    """A user stranded by the old broken flow can sign up again and get in."""
+    with Session(engine) as s:
+        s.add(User(email="legacy@elsewedy.com", username="Old", password_hash=hash_password("old123"), is_verified=False))
+        s.commit()
+
+    r = client.post("/auth/signup", json={"username": "New", "email": "legacy@elsewedy.com", "password": "new123"})
+    assert r.status_code == 200
+    assert client.post("/auth/login", json={"email": "legacy@elsewedy.com", "password": "new123"}).status_code == 200
 
 
 def test_login_success(client, engine):
