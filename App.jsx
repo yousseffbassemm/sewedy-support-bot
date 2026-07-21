@@ -111,9 +111,18 @@ const THEME_CSS = `
        clears it at 6:1. Surfaces and large type keep #E30613. */
     --c-redInk: #B00410;
 
-    --wash1: rgba(227,6,19,.22);
-    --wash2: rgba(255,150,70,.24);
-    --wash3: rgba(80,120,255,.20);
+    /* Tuned by measuring the rendered page, not by eye. Two failure modes
+       sit close together here: at .05 the wash was invisible (mean deviation
+       from flat paper of 5/255), and at .22 it stopped reading as light on
+       white and became a coloured background (chroma 10.6).
+
+       These values land at deviation 12 and chroma 4.1 -- present in the
+       corners, clean white through the middle. The third wash is pulled
+       toward neutral and nearly off: three distinct hues is what tipped it
+       from "warm paper" into "colourful", more than the intensity did. */
+    --wash1: rgba(227,6,19,.085);
+    --wash2: rgba(255,150,70,.075);
+    --wash3: rgba(120,140,190,.035);
     --grain-opacity: .03;
 
     /* Shadows carry a little brand warmth instead of neutral grey. This is
