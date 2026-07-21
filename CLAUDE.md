@@ -186,8 +186,18 @@ Each of these was reproduced first, then fixed, then pinned with a test.
 
 ## Repo
 
-- GitHub: https://github.com/yousseffbassemm/sewedy-support-bot
-- Branch: `main` (all productionization work is committed here).
+- GitHub: https://github.com/yousseffbassemm/sewedy-support-bot — **public**, and as of
+  2026-07-22 actually pushed. It had never been: `origin` pointed at a repo that did not exist,
+  and 39 commits were sitting local-only. CI (tests + the retriever eval gate) is green on `main`.
+- Branch: `main` (all productionization work is committed here). `feature/webapp` is fully merged
+  into `main` (no unique commits) and was deliberately NOT pushed — it would only be a stale
+  duplicate. Its local upstream (`origin/feature/webapp`) no longer exists.
+- **Not published** (git-ignored, verified absent from the remote after pushing): `backend/.env`,
+  `backend/data/app.db` (real accounts + bcrypt hashes), and the three `presentation/*.pptx`.
+- **Is published, knowingly:** the screenshots in `presentation/screenshots/` show the chat sidebar,
+  which renders `ybassem2006@gmail.com`. Flagged before pushing; keeping them was a deliberate
+  choice. Recapturing against a demo account is the fix if that changes — the images are pixels, so
+  no text search will ever surface this.
 - Local project name (`pyproject.toml`): `intern-rag`
 - Importable package: `rag` (in `src/rag/`)
 - Frontend: `supportbot-ui/` — a real Vite project **inside this repo**, React 19 + Vite 8.
