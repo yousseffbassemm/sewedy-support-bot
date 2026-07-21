@@ -117,8 +117,13 @@ def by_name(slide, name: str):
     raise KeyError(f"{name!r} not found on slide (have: {[s.name for s in slide.shapes]})")
 
 
-def add_body(slide, bullets: list[str]) -> None:
-    """Our own body copy, placed in the white slide's empty canvas."""
+def add_body(slide, bullets: list[str], size=None) -> None:
+    """Our own body copy, placed in the white slide's empty canvas.
+
+    `size` drops a couple of points on the slides carrying four bullets, so
+    they stay inside the same safe area as the three-bullet ones.
+    """
+    size = size or BODY_SIZE
     box = slide.shapes.add_textbox(BODY_LEFT, BODY_TOP, BODY_WIDTH, BODY_HEIGHT)
     tf = box.text_frame
     tf.word_wrap = True
@@ -126,7 +131,7 @@ def add_body(slide, bullets: list[str]) -> None:
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         run = p.add_run()
         run.text = text
-        run.font.size = BODY_SIZE
+        run.font.size = size
         run.font.name = BODY_FONT
         run.font.color.rgb = BODY_COLOR
         p.line_spacing = 1.35
@@ -201,16 +206,16 @@ def build() -> None:
     set_number(by_name(s[1], "TextBox 8"), "01")
     set_lines(by_name(s[1], "TextBox 7"), ["The Product"])
 
-    # 3 -- what it is --------------------------------------------------------
+    # 3 -- what it does -----------------------------------------------------
     set_lines(by_name(s[2], "TextBox 6"), ["Find the fix"])
     add_body(
         s[2],
         [
-            "Engineers in the field describe a problem the way they'd say it out "
-            "loud — no error codes, no lookup tables.",
-            "SupportBot searches 66 resolved support cases by meaning, not by "
-            "keyword, and surfaces the closest ones.",
-            "They get the case that already solved it, and the fix that worked.",
+            "Engineers describe a problem the way they'd say it out loud — no "
+            "error codes, no lookup tables.",
+            "SupportBot searches 66 resolved support cases by meaning rather "
+            "than by keyword.",
+            "Suggested questions get you started in a single click.",
         ],
     )
     add_image(s[2], "slide-03-landing-hero-light.png")
@@ -222,22 +227,41 @@ def build() -> None:
         [
             "Every answer names the exact past case behind it — Case ID, the "
             "original problem, and its resolution.",
+            "Follow-up questions work: the chat remembers what was already "
+            "asked.",
+            "Answers can be copied, or rated helpful or not helpful.",
+            "“See how this was found” reveals the search space behind the "
+            "answer — each point a past case, the highlighted ones the match.",
+        ],
+        size=Pt(30),
+    )
+    # This one screenshot carries both features: a cited answer AND the
+    # expanded map underneath it.
+    add_image(s[3], "slide-11-embedding-map.png")
+
+    # 5 -- guardrails --------------------------------------------------------
+    set_lines(by_name(s[4], "TextBox 6"), ["Knows its limits"])
+    add_body(
+        s[4],
+        [
             "If nothing in the knowledge base actually matches, it says so "
-            "instead of guessing.",
-            "Answers can be copied, or rated helpful or not helpful to flag "
-            "where the knowledge base needs a better case.",
+            "instead of guessing an answer.",
+            "Greetings and off-topic questions get a natural reply — never an "
+            "invented case.",
+            "If the AI service is unavailable, it still returns the matching "
+            "cases rather than an error.",
         ],
     )
-    add_image(s[3], "slide-09-grounded-answer.png")
+    add_image(s[4], "slide-08-threshold-rejected.png")
 
-    # 5 -- separator 02 ------------------------------------------------------
-    set_number(by_name(s[4], "TextBox 8"), "02")
-    set_lines(by_name(s[4], "TextBox 7"), ["The Experience"])
+    # 6 -- separator 02 ------------------------------------------------------
+    set_number(by_name(s[5], "TextBox 8"), "02")
+    set_lines(by_name(s[5], "TextBox 7"), ["The Experience"])
 
-    # 6 -- bilingual ---------------------------------------------------------
-    set_lines(by_name(s[5], "TextBox 6"), ["Fully bilingual"])
+    # 7 -- bilingual ---------------------------------------------------------
+    set_lines(by_name(s[6], "TextBox 6"), ["Fully bilingual"])
     add_body(
-        s[5],
+        s[6],
         [
             "One toggle switches the entire interface between English and "
             "Arabic — including a true right-to-left layout.",
@@ -246,52 +270,42 @@ def build() -> None:
             "fallback.",
         ],
     )
-    add_image(s[5], "slide-15-arabic-rtl.png")
+    add_image(s[6], "slide-15-arabic-rtl.png")
 
-    # 7 -- theming -----------------------------------------------------------
-    set_lines(by_name(s[6], "TextBox 6"), ["Light and dark"])
-    add_body(
-        s[6],
-        [
-            "One click re-themes the whole application instantly.",
-            "It follows the operating system by default, and remembers an "
-            "explicit choice permanently.",
-            "Every text and surface pairing was contrast-checked for "
-            "accessibility in both themes.",
-        ],
-    )
-    add_image(s[6], "slide-16-dark-mode.png")
-
-    # 8 -- responsive --------------------------------------------------------
-    set_lines(by_name(s[7], "TextBox 6"), ["Built for the field"])
+    # 8 -- theming + responsive ----------------------------------------------
+    set_lines(by_name(s[7], "TextBox 6"), ["Light and dark"])
     add_body(
         s[7],
         [
-            "The full experience works down to phone width — where support "
-            "actually happens.",
-            "The sidebar becomes a slide-in drawer that opens from the correct "
-            "side in Arabic.",
-            "A refresh never signs you out mid-job.",
+            "One click re-themes the whole application; it follows the "
+            "operating system by default and remembers an explicit choice.",
+            "Every text and surface pairing was contrast-checked for "
+            "accessibility in both themes.",
+            "The full experience works down to phone width, where the sidebar "
+            "becomes a slide-in drawer.",
+            "Keyboard focus is visible throughout, for anyone not using a "
+            "mouse.",
         ],
+        size=Pt(30),
     )
-    # two portrait shots side by side
-    add_image(s[7], "slide-17-mobile-landing.png", left=Inches(14.6), max_w=Inches(5.0))
-    add_image(s[7], "slide-17b-mobile-drawer.png", left=Inches(20.2), max_w=Inches(5.0))
+    add_image(s[7], "slide-16-dark-mode.png", top=Inches(3.2), max_w=Inches(10.4))
+    add_image(
+        s[7], "slide-17b-mobile-drawer.png",
+        left=Inches(23.2), top=Inches(3.2), max_w=Inches(3.0),
+    )
 
-    # 9 -- transparency ------------------------------------------------------
-    set_lines(by_name(s[8], "TextBox 6"), ["It shows its work"])
+    # 9 -- accounts ----------------------------------------------------------
+    set_lines(by_name(s[8], "TextBox 6"), ["Your account"])
     add_body(
         s[8],
         [
-            "“See how this was found” opens a live map of the search space "
-            "behind the answer.",
-            "Each point is a past case; the highlighted ones are what the "
-            "question actually matched.",
-            "Engineers can see why an answer was chosen — not just be asked to "
-            "trust it.",
+            "Engineers create an account and stay signed in — a refresh never "
+            "signs you out mid-job.",
+            "A forgotten password is reset with a code sent to your email.",
+            "Sign-in is protected against repeated password guessing.",
         ],
     )
-    add_image(s[8], "slide-11-embedding-map.png")
+    add_image(s[8], "slide-14-auth-signin.png")
 
     # 10 -- thank you --------------------------------------------------------
     set_lines(by_name(s[9], "TextBox 17"), ["Thank you"])
@@ -301,7 +315,7 @@ def build() -> None:
     # change reads as a change. Deliberately restrained: this is a template
     # deck, not a showreel.
     for i, slide in enumerate(s, start=1):
-        set_transition(slide, "push" if i in (2, 5) else "fade")
+        set_transition(slide, "push" if i in (2, 6) else "fade")
 
     prs.save(OUT)
     print(f"[deck] wrote {OUT}  ({len(s.__iter__.__self__._sldIdLst)} slides)")

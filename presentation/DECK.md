@@ -23,9 +23,11 @@ All three are git-ignored (~50MB combined); `build_deck.py` and the screenshots
 are the tracked source of truth.
 
 To rebuild `structure.pptx` from scratch, see the COM snippet in the project
-history — it duplicates template slides in the order `1,3,2,2,3,2,2,2,2,4`
-(cover, separator, white ×2, separator, white ×4, thank-you) and deletes the
-four originals.
+history — it duplicates template slides in the order `1,3,2,2,2,3,2,2,2,4`
+(cover, separator, white ×3, separator, white ×3, thank-you) and deletes the
+four originals. **If you change the running order, update both that array and
+the separator indices in `set_transition` at the bottom of `build_deck.py`** —
+they are the same two positions and will silently disagree otherwise.
 
 ## The template rule
 
@@ -52,6 +54,22 @@ clear of the template's graphics:
 
 Hence `BODY_LEFT=2.6in`, `IMG_TOP=3.0in`, `IMG_BOTTOM_LIMIT=11.4in`,
 `IMG_RIGHT_LIMIT=26.6in`.
+
+## Feature coverage
+
+Ten slides is a hard cap, so features are *stated* in the body copy even where
+there is no room to show them. Across slides 3, 4, 5, 7, 8 and 9 the deck names:
+plain-language search, 66 resolved cases, suggested questions, Case ID
+citation, conversation memory, copy, helpful/not-helpful rating, "see how this
+was found", the no-match refusal, off-topic handling, the offline fallback,
+English/Arabic with RTL, the Arabic typeface, light/dark theming, OS default +
+remembered choice, contrast checking, phone width + drawer, keyboard focus,
+accounts, session persistence, password reset by email code, and sign-in
+throttling.
+
+Slide 4 uses the embedding-map screenshot deliberately: that one image shows a
+cited answer *and* the expanded map, covering two features in one visual and
+freeing a slide for accounts.
 
 ### Title length is a hard constraint
 
