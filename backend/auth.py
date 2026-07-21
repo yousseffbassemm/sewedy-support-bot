@@ -21,9 +21,22 @@ import bcrypt
 import jwt  # PyJWT
 
 # --- config from environment -------------------------------------------------
-# If JWT_SECRET is unset, we fall back to a fixed dev secret so the app still
-# runs -- but that is NOT safe for anything real. Set it in .env.
-JWT_SECRET = os.environ.get("JWT_SECRET", "dev-insecure-change-me")
+# With JWT_SECRET unset we fall back to a fixed dev secret so a fresh clone
+# still runs. That value is PUBLIC -- it is committed right here -- so anyone
+# could mint a token for any account with it. Convenient locally, catastrophic
+# in production, and the failure is silent: everything works, it is just
+# forgeable. So set SUPPORTBOT_ENV=production and the fallback becomes a
+# refusal to start instead of a quiet downgrade.
+_DEV_SECRET = "dev-insecure-change-me"
+JWT_SECRET = os.environ.get("JWT_SECRET", "").strip() or _DEV_SECRET
+
+if JWT_SECRET == _DEV_SECRET and os.environ.get("SUPPORTBOT_ENV", "").lower() == "production":
+    raise RuntimeError(
+        "JWT_SECRET is unset while SUPPORTBOT_ENV=production. Refusing to start "
+        "with the public development signing key -- anyone could forge a login "
+        "token. Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+    )
+
 JWT_ALG = "HS256"
 TOKEN_TTL_HOURS = 24 * 7  # a week
 

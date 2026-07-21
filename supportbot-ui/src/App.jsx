@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useContext, createContext } from "react";
+// No default `React` import: Vite's React plugin uses the automatic JSX
+// runtime, so JSX compiles without it and nothing here references React.*.
+import { useState, useEffect, useRef, useLayoutEffect, useContext, createContext } from "react";
 import { flushSync } from "react-dom";
 
 /* ============================================================================
@@ -57,9 +59,7 @@ const C = {
 // Alpha compositing bases. Kept separate because they must move in *opposite*
 // directions between themes: a shadow goes darker on a dark surface, while a
 // subtle overlay tint has to go lighter to stay visible at all.
-const SHADOW = "var(--c-shadow-rgb)";
 const TINT = "var(--c-tint-rgb)";
-const RED_RGB = "var(--c-red-rgb)";
 
 // Light is the authored default; dark is a deliberate warm-neutral set rather
 // than inverted greys -- the brand red is warm, and true-neutral greys read
@@ -969,7 +969,8 @@ function ThemeToggle({ small = false }) {
 // Landing
 // ===========================================================================
 function Landing({ onStart, session }) {
-  const { t, dir, toggleLang } = useLang();
+  // No `dir` here: the root wrapper already sets it, and this subtree inherits.
+  const { t, toggleLang } = useLang();
   return (
     <div style={styles.landingWrap}>
       <header style={styles.nav} className="siteNav">
@@ -1665,12 +1666,18 @@ function Chat({ session, onHome, onSignOut }) {
       ]);
     } catch (e) {
       setBusy(false);
+      // Being rate limited is not a failure, it's "slow down" -- and /chat
+      // allows 30/min, so it is reachable. The generic error tells the user
+      // something broke when nothing did, and hides the one useful detail
+      // (how long to wait). Surface the backend's own wording for that case
+      // only; everything else stays generic so internals never leak.
+      const isRateLimit = /^Too many requests/.test(e?.message || "");
       setMessages((m) => [
         ...m,
         {
           who: "bot",
           kind: "empty",
-          text: t.chatError,
+          text: isRateLimit ? localizeError(e.message, lang) : t.chatError,
         },
       ]);
     }

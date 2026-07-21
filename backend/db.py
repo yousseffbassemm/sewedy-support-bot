@@ -10,11 +10,26 @@ The DB file lives at backend/data/app.db (git-ignored).
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from sqlmodel import Field, SQLModel, create_engine, Session
+
+
+def utcnow() -> datetime:
+    """Current UTC time as a NAIVE datetime.
+
+    datetime.utcnow() is deprecated from Python 3.12, but its drop-in
+    replacement datetime.now(timezone.utc) is timezone-AWARE, and these values
+    go into plain SQLite DateTime columns that store no offset. Mixing the two
+    is the trap: an aware value written now reads back naive later, and
+    comparing the two raises "can't compare offset-naive and offset-aware
+    datetimes" -- which would break password-reset expiry at runtime, not at
+    import. So compute in UTC explicitly, then drop the tzinfo to keep the
+    stored representation exactly what it has always been.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 # --- database file location -------------------------------------------------
 _DB_DIR = Path(__file__).parent / "data"
@@ -49,7 +64,7 @@ class User(SQLModel, table=True):
     pending_kind: Optional[str] = Field(default=None)  # "verify" | "reset"
     pending_expires: Optional[datetime] = Field(default=None)
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class Feedback(SQLModel, table=True):
@@ -66,7 +81,7 @@ class Feedback(SQLModel, table=True):
     case_id: Optional[str] = Field(default=None, index=True)
     vote: str  # "up" | "down"
     user_email: Optional[str] = Field(default=None, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 def init_db() -> None:

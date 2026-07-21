@@ -13,10 +13,12 @@ Run:
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 import backend.main as main
 from backend import security
@@ -64,6 +66,9 @@ def client(engine, monkeypatch):
     monkeypatch.setattr(main, "hybrid_search", lambda q, s, top_k=5: list(_FAKE_HITS))
     monkeypatch.setattr(main, "generate_reply", lambda *a, **k: "MOCK GROUNDED REPLY")
     monkeypatch.setattr(main, "send_code", lambda *a, **k: None)
+
+    # No real model load on startup -- the suite runs offline and mocked.
+    monkeypatch.setenv("SUPPORTBOT_WARMUP", "0")
 
     security._reset_all_for_tests()
     with TestClient(main.app) as c:
@@ -226,6 +231,69 @@ def test_login_unverified_blocked(client, engine):
     assert r.status_code == 403
 
 
+def test_auth_me_requires_bearer_header(client):
+    """The token must travel in a header, never in the URL."""
+    creds = {"username": "Me", "email": "me@elsewedy.com", "password": "secret1"}
+    token = client.post("/auth/signup", json=creds).json()["token"]
+
+    r = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert r.json()["email"] == "me@elsewedy.com"
+
+    # The old query-parameter form must no longer authenticate anything.
+    assert client.get("/auth/me", params={"token": token}).status_code == 401
+    assert client.get("/auth/me").status_code == 401
+    assert client.get("/auth/me", headers={"Authorization": token}).status_code == 401
+    assert client.get("/auth/me", headers={"Authorization": "Bearer nonsense"}).status_code == 401
+
+
+def test_password_reset_round_trip(client, engine, monkeypatch):
+    """Exercises the pending_expires comparison.
+
+    Worth pinning: these timestamps are naive UTC in a naive SQLite column, so
+    switching them to timezone-aware values would raise "can't compare
+    offset-naive and offset-aware datetimes" HERE, at runtime, rather than
+    anywhere a type checker or import would catch it.
+    """
+    _make_verified_user(engine, email="reset@elsewedy.com")
+
+    # The client fixture stubs send_code to a no-op; capture the code instead.
+    codes = {}
+    monkeypatch.setattr(main, "send_code", lambda to, code, kind: codes.update(code=code))
+
+    assert client.post("/auth/forgot", json={"email": "reset@elsewedy.com"}).status_code == 200
+    r = client.post(
+        "/auth/reset",
+        json={"email": "reset@elsewedy.com", "code": codes["code"], "new_password": "brandnew1"},
+    )
+    assert r.status_code == 200, r.json()
+
+    assert client.post("/auth/login", json={"email": "reset@elsewedy.com", "password": "brandnew1"}).status_code == 200
+    assert client.post("/auth/login", json={"email": "reset@elsewedy.com", "password": "secret1"}).status_code == 401
+
+
+def test_password_reset_rejects_expired_code(client, engine):
+    from datetime import timedelta
+
+    from backend.db import utcnow
+
+    _make_verified_user(engine, email="expired@elsewedy.com")
+    with Session(engine) as s:
+        u = s.exec(select(User).where(User.email == "expired@elsewedy.com")).first()
+        u.pending_code = "123456"
+        u.pending_kind = "reset"
+        u.pending_expires = utcnow() - timedelta(minutes=1)  # already lapsed
+        s.add(u)
+        s.commit()
+
+    r = client.post(
+        "/auth/reset",
+        json={"email": "expired@elsewedy.com", "code": "123456", "new_password": "brandnew1"},
+    )
+    assert r.status_code == 400
+    assert "expired" in r.json()["detail"].lower()
+
+
 # --- hardening: rate limit + lockout ---------------------------------------
 
 def test_signup_rate_limited(client):
@@ -267,13 +335,77 @@ def test_contextualize_noop_without_history():
     assert main._contextualize("and it still fails", None) == "and it still fails"
 
 
+# The client stores history as the user's RAW typed text, so for an Arabic
+# chat the history is Arabic. Retrieval runs on an English-only embedder,
+# which is the entire reason /chat translates first -- so whatever
+# contextualization folds in has to be translated too, or the translated
+# query gets Arabic glued back onto it.
+_AR_PREV = "جهاز ThermoNode T5 لا يكمل تحديث البرنامج"
+_AR_FOLLOWUP = "وهل ما زال يفشل؟"
+_AR_TO_EN = {
+    _AR_PREV: "my ThermoNode T5 firmware update keeps failing",
+    _AR_FOLLOWUP: "and does it still fail",
+}
+
+
+def test_arabic_followup_is_searched_entirely_in_english(client, monkeypatch):
+    """An Arabic follow-up must reach retrieval as pure English.
+
+    This fires precisely in the Arabic path: the follow-up translates to
+    English, the English then contains a referring word ("it"), which triggers
+    contextualization, which used to prepend the UNTRANSLATED Arabic previous
+    question -- reintroducing the exact problem translation exists to prevent.
+    """
+    captured = {}
+
+    def _capture(q, settings, top_k=5):
+        captured["query"] = q
+        return list(_FAKE_HITS)
+
+    monkeypatch.setattr(main, "hybrid_search", _capture)
+    monkeypatch.setattr(main, "translate_to_english", lambda q: _AR_TO_EN.get(q, q))
+
+    r = client.post(
+        "/chat",
+        json={"query": _AR_FOLLOWUP, "history": [{"role": "user", "text": _AR_PREV}]},
+    )
+    assert r.status_code == 200
+
+    searched = captured["query"]
+    assert not re.search(r"[؀-ۿ]", searched), f"Arabic reached retrieval: {searched!r}"
+    # And the context was genuinely folded in, not merely dropped.
+    assert "ThermoNode T5" in searched
+
+
 # --- feedback ---------------------------------------------------------------
 
 def test_feedback_records_and_aggregates(client):
+    # Voting stays anonymous -- the UI fires it without a token.
     assert client.post("/feedback", json={"query": "firmware fails", "vote": "up", "case_id": "9999-0001"}).status_code == 200
     assert client.post("/feedback", json={"query": "no display", "vote": "down"}).status_code == 200
-    stats = client.get("/feedback/stats").json()
+
+    # Reading the aggregate does not: it reports on internal performance.
+    token = client.post(
+        "/auth/signup", json={"username": "Admin", "email": "admin@elsewedy.com", "password": "secret1"}
+    ).json()["token"]
+    stats = client.get("/feedback/stats", headers={"Authorization": f"Bearer {token}"}).json()
     assert stats == {"up": 1, "down": 1, "total": 2}
+
+
+def test_feedback_stats_requires_auth(client):
+    assert client.get("/feedback/stats").status_code == 401
+    assert client.get("/feedback/stats", headers={"Authorization": "Bearer nonsense"}).status_code == 401
+
+
+def test_feedback_stats_empty_is_zero_not_an_error(client):
+    """The grouped COUNT returns no rows at all when nothing has been voted on;
+    the endpoint must read that as zeroes rather than KeyError."""
+    token = client.post(
+        "/auth/signup", json={"username": "Admin", "email": "admin2@elsewedy.com", "password": "secret1"}
+    ).json()["token"]
+    r = client.get("/feedback/stats", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert r.json() == {"up": 0, "down": 0, "total": 0}
 
 
 def test_feedback_rejects_bad_vote(client):

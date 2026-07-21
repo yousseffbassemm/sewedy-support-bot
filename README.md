@@ -74,7 +74,9 @@ Wraps the RAG pipeline behind a real API, adds accounts, and adds an LLM answer-
 | `POST /auth/signup` | create account (bcrypt-hashed password, JWT returned immediately — no email step) |
 | `POST /auth/login` | check password, return JWT |
 | `POST /auth/forgot` / `POST /auth/reset` | email (or console-print) a 6-digit code, confirm + set new password |
-| `GET /auth/me` | who am I, from JWT |
+| `GET /auth/me` | who am I — send `Authorization: Bearer <token>` (never in the URL, where it would land in logs and history) |
+| `POST /feedback` | record 👍/👎 on an answer; anonymous |
+| `GET /feedback/stats` | aggregate vote counts; **sign-in required** (`Authorization: Bearer <token>`) |
 
 ### Setup
 

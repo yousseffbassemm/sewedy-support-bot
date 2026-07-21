@@ -46,9 +46,45 @@ whether continued extension or consolidating/presenting what exists is the bette
 - Embedding provider: `local` (MiniLM, `all-MiniLM-L6-v2`), 384-dim
 - Vector store: ChromaDB, persistent, `data/chroma/`, collection `support_cases`
 - Answer generation: Gemini (`gemini-2.5-flash`), thinking disabled, grounding threshold 0.65 cosine distance
-- Tests: 58/58 passing (`test_ingest.py` + `test_retrieve.py` + `test_backend.py`)
+- Tests: 64/64 passing (`test_ingest.py` + `test_retrieve.py` + `test_backend.py`)
 - Retriever eval (`eval/eval_set_public.json`, 15 queries): hybrid engine 100% Hit@1 on identifier
   and paraphrase queries, 100% out-of-domain rejection, MRR@5 = 1.000. Run: `uv run python -m eval.eval_retriever`.
+
+## Correctness + hardening pass (after the web app was reviewed end to end)
+
+Each of these was reproduced first, then fixed, then pinned with a test.
+
+- **Cold start: the first `/chat` took 86 SECONDS.** Measured, not estimated — MiniLM + torch loading
+  into memory on first use (the model was already cached; this is load, not download). Every later
+  query was well under a second. `_warm_retrieval()` now runs on a **daemon thread** from the lifespan
+  hook, so the server accepts connections immediately (verified: `/health` answered in 0.24s mid-warmup)
+  and the first real question dropped **86.4s → 2.5s**. Blocking startup instead would just move the
+  same wait to boot, and `uvicorn --reload` would pay it on every code change. `SUPPORTBOT_WARMUP=0`
+  disables it; the test fixture sets that, or the offline suite would do ~90s of real model work.
+- **Arabic follow-ups were searched with Arabic text.** `_contextualize` ran AFTER
+  `translate_to_english` but folded in the raw history, which the client stores as the user's typed
+  text. It fires *precisely* in the Arabic path: the follow-up translates to English, the English then
+  contains a referring word ("it"), which triggers contextualization, which glued the untranslated
+  Arabic previous question back on — handing the English-only embedder the mixed-script query that
+  translation exists to prevent. The folded-in turn is now translated too.
+- **`/auth/me` took the JWT as a query parameter** — a week-long credential in a place that is copied
+  by default (access logs, browser history, `Referer`). Now `Authorization: Bearer <token>`; the query
+  form no longer authenticates. Safe to change: the frontend never called it (its `api()` is POST-only).
+- **`datetime.utcnow()` (deprecated in 3.12) in 6 places.** The naive fix is a trap: the drop-in
+  `datetime.now(timezone.utc)` is timezone-AWARE, these values live in naive SQLite columns, and
+  comparing the two raises "can't compare offset-naive and offset-aware" — breaking password-reset
+  expiry at RUNTIME, not at import. `db.utcnow()` computes in UTC then drops tzinfo, preserving the
+  stored representation exactly. Pinned by a reset round-trip + an expired-code test.
+- **`/feedback/stats` was public and counted in Python.** Now requires a Bearer token and aggregates
+  with a SQL `GROUP BY` (a grouped COUNT returns *no rows* when nothing has been voted on, so the
+  zero case is explicitly tested rather than KeyError-ing).
+- **`JWT_SECRET` fell back silently** to a value committed in this repo — anyone could forge a token
+  for any account, and nothing looked wrong. `SUPPORTBOT_ENV=production` now makes that fallback a
+  refusal to start. Verified in all three modes.
+- Frontend: chat now surfaces the real message when the backend rate-limits (30/min on `/chat` is
+  reachable) instead of a generic "something went wrong", which hid the one useful detail — how long
+  to wait. Lint went 8 findings → 2; the 2 left are React effect-timing advisories in working
+  animation code, deliberately not refactored days before a presentation.
 
 ## Known data-quality findings (from real testing, not code bugs)
 

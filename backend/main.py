@@ -9,7 +9,7 @@ Endpoints:
   POST /auth/login             -> check password, return token
   POST /auth/forgot            -> email a reset code
   POST /auth/reset             -> confirm code + set new password
-  GET  /auth/me                -> who am I (from JWT)
+  GET  /auth/me                -> who am I (Authorization: Bearer <token>)
 
 Run from the PROJECT ROOT (so the `rag` package imports cleanly):
     uv run uvicorn backend.main:app --reload --port 8000
@@ -31,15 +31,18 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 import logging
+import os
 import random
 import re
+import threading
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import timedelta
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from backend.auth import (
@@ -48,7 +51,7 @@ from backend.auth import (
     hash_password,
     verify_password,
 )
-from backend.db import Feedback, User, get_session, init_db
+from backend.db import Feedback, User, get_session, init_db, utcnow
 from backend.email_utils import email_mode, send_code
 from backend.embedding_map import EmbeddingMap
 from backend.llm import generate_reply, needs_translation, translate_to_english
@@ -69,10 +72,37 @@ logging.basicConfig(
 from rag.config import load_config
 from rag.retrieve import semantic_search, hybrid_search, detect_product_query
 
+def _warm_retrieval() -> None:
+    """Load the embedding model, Chroma collection and BM25 index up front.
+
+    Measured cold: the FIRST /chat took 86 SECONDS on an already-cached model
+    -- that is MiniLM plus torch being loaded into memory, and every later
+    query took well under a second. Left alone it lands on whoever asks the
+    first question, which in a demo is the worst possible moment.
+
+    Runs on a daemon thread so the server still accepts connections
+    immediately (a blocking warmup would just move the same 86s to startup,
+    where `uvicorn --reload` would pay it again on every code change). A query
+    arriving mid-warmup simply waits on the same lazy load it always did, so
+    this can only help. Failure is logged, never fatal: a warmup that cannot
+    reach the index must not stop the API from serving.
+    """
+    try:
+        start = time.perf_counter()
+        hybrid_search("power supply failure", _SETTINGS, top_k=1)
+        logger.info("retrieval warm (%.0fms)", (time.perf_counter() - start) * 1000)
+    except Exception as exc:  # noqa: BLE001 -- warmup is best-effort
+        logger.warning("retrieval warmup failed; first query pays the cost: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown hook (modern replacement for @app.on_event)."""
     init_db()
+    # Off by default under test, where the model is mocked and loading it
+    # would add ~90s of real work to a suite designed to run offline.
+    if os.environ.get("SUPPORTBOT_WARMUP", "1").strip().lower() not in ("0", "false", "no"):
+        threading.Thread(target=_warm_retrieval, name="supportbot-warmup", daemon=True).start()
     logger.info("SupportBot API ready. email mode = %s", email_mode())
     yield
 
@@ -210,8 +240,18 @@ def _contextualize(query: str, history: list[dict] | None) -> str:
     Retrieval runs on the current message only, so a bare follow-up carries no
     product or symptom words and retrieves badly -- the LLM gets the history,
     but the search doesn't. When the message contains a referring word and is
-    short, we search "previous question + follow-up" instead. Purely lexical:
-    no extra model call, and a self-contained question is never touched.
+    short, we search "previous question + follow-up" instead. A self-contained
+    question is never touched.
+
+    `query` arrives already translated to English. The history does NOT: the
+    client stores each turn as the user's raw typed text, so in an Arabic chat
+    it is Arabic. The folded-in turn is therefore translated too -- otherwise
+    an Arabic follow-up (which translates to English, then trips the referring
+    word test) gets untranslated Arabic glued back on, handing the English-only
+    embedder exactly the mixed-script query the translation step exists to
+    prevent. translate_to_english is a no-op for English text and is cached, so
+    for an English chat this costs nothing and for an Arabic one the previous
+    turn is almost always already in the cache from when it was first asked.
     """
     if not history:
         return query
@@ -229,7 +269,9 @@ def _contextualize(query: str, history: list[dict] | None) -> str:
         ),
         "",
     )
-    return f"{last_user} {query}".strip() if last_user else query
+    if not last_user:
+        return query
+    return f"{translate_to_english(last_user)} {query}".strip()
 
 
 def _fallback_reply(hits: list[dict], arabic: bool = False) -> str:
@@ -516,7 +558,7 @@ def forgot(req: ForgotRequest, request: Request, session: Session = Depends(get_
     code = _gen_code()
     user.pending_code = code
     user.pending_kind = "reset"
-    user.pending_expires = datetime.utcnow() + timedelta(minutes=_CODE_TTL_MIN)
+    user.pending_expires = utcnow() + timedelta(minutes=_CODE_TTL_MIN)
     session.add(user)
     session.commit()
     send_code(user.email, code, "reset")
@@ -529,7 +571,7 @@ def reset(req: ResetRequest, request: Request, session: Session = Depends(get_se
     user = _get_user(session, req.email)
     if not user or user.pending_kind != "reset":
         raise HTTPException(400, "No pending reset for that email.")
-    if user.pending_expires and datetime.utcnow() > user.pending_expires:
+    if user.pending_expires and utcnow() > user.pending_expires:
         raise HTTPException(400, "Code expired. Request a new one.")
     if req.code != user.pending_code:
         raise HTTPException(400, "Incorrect code.")
@@ -545,9 +587,28 @@ def reset(req: ResetRequest, request: Request, session: Session = Depends(get_se
     return {"ok": True, "message": "Password updated."}
 
 
+def _bearer_token(authorization: str | None) -> str:
+    """Pull the token out of an `Authorization: Bearer <token>` header.
+
+    The token used to arrive as a QUERY PARAMETER, which puts a week-long
+    credential into somewhere it is copied by default: server access logs,
+    browser history, and the Referer header on any outbound link. A header is
+    not logged by default and is not part of the URL.
+    """
+    if not authorization:
+        raise HTTPException(401, "Missing Authorization header.")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(401, "Authorization header must be 'Bearer <token>'.")
+    return token.strip()
+
+
 @app.get("/auth/me")
-def me(token: str, session: Session = Depends(get_session)) -> dict:
-    email = decode_token(token)
+def me(
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+) -> dict:
+    email = decode_token(_bearer_token(authorization))
     if not email:
         raise HTTPException(401, "Invalid or expired token.")
     user = _get_user(session, email)
@@ -591,9 +652,26 @@ def submit_feedback(
 
 
 @app.get("/feedback/stats")
-def feedback_stats(session: Session = Depends(get_session)) -> dict:
-    """Aggregate up/down counts -- a tiny analytics surface for an admin view."""
-    votes = session.exec(select(Feedback)).all()
-    up = sum(1 for v in votes if v.vote == "up")
-    down = sum(1 for v in votes if v.vote == "down")
+def feedback_stats(
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Aggregate up/down counts -- a tiny analytics surface for an admin view.
+
+    Sign-in required: this reports on how the tool is performing internally,
+    which is not something to serve to anonymous callers. Counting happens in
+    SQL rather than by loading every Feedback row into Python, so the endpoint
+    costs the same whether there are ten votes or a million.
+    """
+    email = decode_token(_bearer_token(authorization))
+    if not email or not _get_user(session, email):
+        raise HTTPException(401, "Invalid or expired token.")
+
+    counts = dict(
+        session.exec(
+            select(Feedback.vote, func.count()).group_by(Feedback.vote)  # type: ignore[arg-type]
+        ).all()
+    )
+    up = int(counts.get("up", 0))
+    down = int(counts.get("down", 0))
     return {"up": up, "down": down, "total": up + down}
