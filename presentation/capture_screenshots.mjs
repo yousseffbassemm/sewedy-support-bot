@@ -126,6 +126,53 @@ const scrollChatToBottom = () => evaluate(`
   })()
 `);
 
+
+/**
+ * Wait until the landing preview is actually showing a conversation.
+ *
+ * The preview cycles through four canned conversations and fades between them
+ * (`opacity: phase === "idle" ? 1 : 0`), revealing hits one at a time. A fixed
+ * sleep lands in a fade often enough that slides 3/15/16 were captured with an
+ * empty window. So: poll until the card is opaque AND its text has stopped
+ * growing, i.e. the conversation is fully revealed rather than mid-reveal.
+ */
+async function waitForPreview(maxMs = 30000) {
+  const probe = `(() => {
+    const qs = ["Readings drift higher","Unit fails the compliance","Screen shows nothing",
+                "Device reboots randomly","القراءات ترتفع","الوحدة تفشل","الشاشة لا تعرض","الجهاز يعيد"];
+    const cards = [...document.querySelectorAll("div")].filter(d => {
+      const t = d.textContent || "";
+      return t.includes("SupportBot") && qs.some(q => t.includes(q));
+    });
+    const card = cards[cards.length - 1];
+    if (!card) return JSON.stringify({ ok: false, len: 0 });
+    // any ancestor mid-fade makes it invisible regardless of its own opacity
+    let el = card, opaque = true;
+    while (el && el !== document.body) {
+      if (parseFloat(getComputedStyle(el).opacity) < 0.99) { opaque = false; break; }
+      el = el.parentElement;
+    }
+    return JSON.stringify({ ok: opaque, len: (card.innerText || "").length });
+  })()`;
+
+  const deadline = Date.now() + maxMs;
+  let stable = 0, lastLen = -1;
+  while (Date.now() < deadline) {
+    const { ok, len } = JSON.parse(await evaluate(probe));
+    // A revealed conversation is question + at least one case card.
+    if (ok && len > 90) {
+      stable = len === lastLen ? stable + 1 : 0;
+      if (stable >= 2) return true;            // steady for ~1s
+    } else {
+      stable = 0;
+    }
+    lastLen = len;
+    await sleep(500);
+  }
+  console.log("   NOTE: preview never settled; capturing anyway");
+  return false;
+}
+
 async function main() {
   mkdirSync(OUT, { recursive: true });
 
@@ -192,7 +239,7 @@ async function main() {
   // --- 03 landing, light ---------------------------------------------------
   step("landing", async () => {
     await fresh();
-    await sleep(3200);                       // preview conversation animates in
+    await waitForPreview();
     await shot("slide-03-landing-hero-light");
   });
 
@@ -291,14 +338,14 @@ async function main() {
   // --- 15 Arabic RTL -------------------------------------------------------
   step("arabic", async () => {
     await fresh({ lang: "ar" });
-    await sleep(3200);
+    await waitForPreview();
     await shot("slide-15-arabic-rtl");
   });
 
   // --- 16 dark mode --------------------------------------------------------
   step("dark", async () => {
     await fresh({ theme: "dark" });
-    await sleep(3200);
+    await waitForPreview();
     await shot("slide-16-dark-mode");
     await enterChat();
     await ask("the display stays blank after power on");
@@ -311,7 +358,7 @@ async function main() {
     await fresh();
     await viewport(390, 844, 3, true);
     await goto();
-    await sleep(3000);
+    await waitForPreview();
     await shot("slide-17-mobile-landing");
 
     await enterChat();
