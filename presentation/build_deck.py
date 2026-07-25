@@ -255,7 +255,7 @@ def build() -> None:
     add_credits(
         s[0],
         BYLINE,
-        "AI Section · Elsewedy Electric  |  Summer Internship 2026",
+        "AI Section — Elsewedy Electric | Summer Internship 2026",
     )
 
     # 2 -- the problem -------------------------------------------------------
