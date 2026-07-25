@@ -109,7 +109,8 @@ Early testing surfaced two real failure modes:
   if it applied.
 
 Prompting alone ("don't invent things") reduced but didn't eliminate this. The fix that actually holds is a
-**code-level distance threshold** (`GOOD_MATCH_MAX_DISTANCE = 0.65` in `main.py`): any retrieved case whose
+**code-level distance threshold** (`GOOD_MATCH_MAX_DISTANCE = 0.735` in `main.py`, the data-derived
+midpoint of the answerable/out-of-domain separation gap): any retrieved case whose
 cosine distance exceeds this is filtered out *before* it ever reaches Gemini's context. It's not asked to
 ignore weak matches — it structurally never receives them. The raw, unfiltered top-5 still comes back in the
 API response so the "see how this was found" panel stays honest about what was actually searched.

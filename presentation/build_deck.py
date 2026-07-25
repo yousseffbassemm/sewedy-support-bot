@@ -56,6 +56,10 @@ BODY_SIZE = Pt(34)
 BODY_COLOR = RGBColor(0x33, 0x33, 0x33)
 RED = RGBColor(0xE5, 0x1B, 0x29)
 
+# Author byline on the cover. One place to edit -- replace with the full team,
+# e.g. "Built by Youssef Bassem, <name>, <name>".
+BYLINE = "Built by Youssef Bassem"
+
 
 # ---------------------------------------------------------------------------
 # Text helpers
@@ -161,6 +165,50 @@ def add_image(slide, filename: str, left=None, top=None, max_w=None, max_h=None)
     return slide.shapes.add_picture(str(path), left, top, width=width, height=height)
 
 
+def add_credits(slide, byline: str, footer: str) -> None:
+    """Author credits on the dark cover, in the clear band between the template
+    subtitle (ends ~10.3in) and the WEDY.AI mark (starts ~13.2in). White text,
+    left-aligned to the title. Adds our own box -- no template shape is touched.
+    """
+    box = slide.shapes.add_textbox(Inches(2.0), Inches(10.8), Inches(14.0), Inches(1.9))
+    tf = box.text_frame
+    tf.word_wrap = True
+    for i, (text, pt) in enumerate([(byline, 30), (footer, 22)]):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        run = p.add_run()
+        run.text = text
+        run.font.size = Pt(pt)
+        run.font.name = BODY_FONT
+        run.font.bold = i == 0
+        run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        p.space_after = Pt(8)
+
+
+def add_stats(slide, items: list[tuple[str, str]], left=Inches(15.4), top=Inches(3.6)) -> None:
+    """Big-number callouts stacked down the right half, for the data slides
+    (metrics, architecture) that carry no screenshot. Each item is
+    (big_number, caption): the number in brand red, the caption in grey."""
+    y = top
+    for big, caption in items:
+        box = slide.shapes.add_textbox(left, y, Inches(10.4), Inches(2.5))
+        tf = box.text_frame
+        tf.word_wrap = True
+        p1 = tf.paragraphs[0]
+        r1 = p1.add_run()
+        r1.text = big
+        r1.font.size = Pt(66)
+        r1.font.bold = True
+        r1.font.name = BODY_FONT
+        r1.font.color.rgb = RED
+        p2 = tf.add_paragraph()
+        r2 = p2.add_run()
+        r2.text = caption
+        r2.font.size = Pt(24)
+        r2.font.name = BODY_FONT
+        r2.font.color.rgb = BODY_COLOR
+        y = Emu(y + Inches(2.55))
+
+
 # ---------------------------------------------------------------------------
 # Slide transitions
 # ---------------------------------------------------------------------------
@@ -204,15 +252,49 @@ def build() -> None:
         by_name(s[0], "TextBox 18"),
         ["An AI support assistant for", "Elsewedy field engineers"],
     )
+    add_credits(
+        s[0],
+        BYLINE,
+        "AI Section · Elsewedy Electric  |  Summer Internship 2026",
+    )
 
-    # 2 -- separator 01 ------------------------------------------------------
-    set_number(by_name(s[1], "TextBox 8"), "01")
-    set_lines(by_name(s[1], "TextBox 7"), ["The Product"])
-
-    # 3 -- what it does -----------------------------------------------------
-    set_lines(by_name(s[2], "TextBox 6"), ["Find the fix"])
+    # 2 -- the problem -------------------------------------------------------
+    # Numbers here are real, measured from data/cases_clean.jsonl: 22 of 66
+    # searchable cases repeat a problem already solved on another unit (33%),
+    # and one problem recurs across three products. The time-cost and
+    # knowledge-loss points are framed qualitatively rather than with an
+    # invented figure.
+    set_lines(by_name(s[1], "TextBox 6"), ["The problem"])
     add_body(
-        s[2],
+        s[1],
+        [
+            "A device fails in the field. The fix almost always exists "
+            "already — in an old ticket, a senior engineer's memory, a "
+            "colleague's inbox. Reaching it means asking around and waiting.",
+            "These faults repeat. In our own case base, one resolved case in "
+            "three is a problem that had already been solved on another unit — "
+            "one recurs across three different products.",
+            "And the knowledge lives in people. When an experienced engineer "
+            "leaves, the fixes they carried leave with them.",
+            "SupportBot turns those resolved cases into a shared memory any "
+            "engineer can search in seconds.",
+        ],
+        size=Pt(30),
+    )
+    add_stats(
+        s[1],
+        [("1 in 3", "resolved cases repeat a problem\nalready solved elsewhere")],
+        top=Inches(5.2),
+    )
+
+    # 3 -- separator 01 ------------------------------------------------------
+    set_number(by_name(s[2], "TextBox 8"), "01")
+    set_lines(by_name(s[2], "TextBox 7"), ["The Product"])
+
+    # 4 -- what it does -----------------------------------------------------
+    set_lines(by_name(s[3], "TextBox 6"), ["Find the fix"])
+    add_body(
+        s[3],
         [
             "Engineers describe a problem the way they'd say it out loud — no "
             "error codes, no lookup tables.",
@@ -224,12 +306,12 @@ def build() -> None:
         ],
         size=Pt(30),
     )
-    add_image(s[2], "slide-03-landing-hero-light.png")
+    add_image(s[3], "slide-03-landing-hero-light.png")
 
-    # 4 -- citation ----------------------------------------------------------
-    set_lines(by_name(s[3], "TextBox 6"), ["Cited answers"])
+    # 5 -- citation ----------------------------------------------------------
+    set_lines(by_name(s[4], "TextBox 6"), ["Cited answers"])
     add_body(
-        s[3],
+        s[4],
         [
             "Every answer names the exact past case behind it — Case ID, the "
             "original problem, and its resolution.",
@@ -239,12 +321,12 @@ def build() -> None:
             "where the knowledge base needs a better case.",
         ],
     )
-    add_image(s[3], "slide-09-grounded-answer.png")
+    add_image(s[4], "slide-09-grounded-answer.png")
 
-    # 5 -- conversation memory -----------------------------------------------
-    set_lines(by_name(s[4], "TextBox 6"), ["It remembers"])
+    # 6 -- conversation memory -----------------------------------------------
+    set_lines(by_name(s[5], "TextBox 6"), ["It remembers"])
     add_body(
-        s[4],
+        s[5],
         [
             "Follow-up questions work: “does it happen on the FlowMeter X100 "
             "too” is understood in the context of what came before.",
@@ -253,12 +335,12 @@ def build() -> None:
             "Every reply is still grounded in its own cited case.",
         ],
     )
-    add_image(s[4], "slide-10-followup-memory.png")
+    add_image(s[5], "slide-10-followup-memory.png")
 
-    # 6 -- explainability ----------------------------------------------------
-    set_lines(by_name(s[5], "TextBox 6"), ["Shows its work"])
+    # 7 -- explainability ----------------------------------------------------
+    set_lines(by_name(s[6], "TextBox 6"), ["Shows its work"])
     add_body(
-        s[5],
+        s[6],
         [
             "“See how this was found” reveals the search space behind the "
             "answer.",
@@ -268,16 +350,16 @@ def build() -> None:
             "trust it.",
         ],
     )
-    add_image(s[5], "slide-11-embedding-map.png")
+    add_image(s[6], "slide-11-embedding-map.png")
 
-    # 7 -- separator 02 ------------------------------------------------------
-    set_number(by_name(s[6], "TextBox 8"), "02")
-    set_lines(by_name(s[6], "TextBox 7"), ["Trust"])
+    # 8 -- separator 02 ------------------------------------------------------
+    set_number(by_name(s[7], "TextBox 8"), "02")
+    set_lines(by_name(s[7], "TextBox 7"), ["Trust"])
 
-    # 8 -- scope -------------------------------------------------------------
-    set_lines(by_name(s[7], "TextBox 6"), ["Stays in scope"])
+    # 9 -- scope -------------------------------------------------------------
+    set_lines(by_name(s[8], "TextBox 6"), ["Stays in scope"])
     add_body(
-        s[7],
+        s[8],
         [
             "General-knowledge questions are declined — this is a product "
             "support tool, not a general chatbot.",
@@ -286,12 +368,12 @@ def build() -> None:
             "An unrelated case is never dressed up as a resolution.",
         ],
     )
-    add_image(s[7], "slide-08-threshold-rejected.png")
+    add_image(s[8], "slide-08-threshold-rejected.png")
 
-    # 9 -- small talk --------------------------------------------------------
-    set_lines(by_name(s[8], "TextBox 6"), ["Small talk"])
+    # 10 -- small talk -------------------------------------------------------
+    set_lines(by_name(s[9], "TextBox 6"), ["Small talk"])
     add_body(
-        s[8],
+        s[9],
         [
             "Greetings and casual questions get a warm, natural reply.",
             "It answers, then steers back to what it can actually help with.",
@@ -299,12 +381,12 @@ def build() -> None:
             "format appears only when there is a real case behind it.",
         ],
     )
-    add_image(s[8], "slide-12-small-talk.png")
+    add_image(s[9], "slide-12-small-talk.png")
 
-    # 10 -- graceful degradation ---------------------------------------------
-    set_lines(by_name(s[9], "TextBox 6"), ["Always answers"])
+    # 11 -- graceful degradation ---------------------------------------------
+    set_lines(by_name(s[10], "TextBox 6"), ["Always answers"])
     add_body(
-        s[9],
+        s[10],
         [
             "If the answer-writing service is unavailable, the matching cases "
             "are still listed in full.",
@@ -313,16 +395,67 @@ def build() -> None:
             "It degrades gracefully rather than showing an error screen.",
         ],
     )
-    add_image(s[9], "slide-13-offline-fallback.png")
+    add_image(s[10], "slide-13-offline-fallback.png")
 
-    # 11 -- separator 03 -----------------------------------------------------
-    set_number(by_name(s[10], "TextBox 8"), "03")
-    set_lines(by_name(s[10], "TextBox 7"), ["The Experience"])
-
-    # 12 -- bilingual --------------------------------------------------------
-    set_lines(by_name(s[11], "TextBox 6"), ["Fully bilingual"])
+    # 12 -- how we measured it (metrics) -------------------------------------
+    # Every number here is reproduced by `uv run python -m eval.eval_retriever`.
+    set_lines(by_name(s[11], "TextBox 6"), ["How we measured it"])
     add_body(
         s[11],
+        [
+            "A 15-query Gold Set — 5 exact-identifier, 7 paraphrase, 3 "
+            "out-of-domain — each hand-labelled with its correct case.",
+            "Against those labels we measured Hit@1, Hit@3, Hit@5 and MRR@5 — "
+            "real retrieval scores, not impressions.",
+            "The abstention cutoff is derived, not guessed: answerable cases "
+            "land at distance ≤ 0.582, out-of-domain at ≥ 0.874. We set it at "
+            "0.735 — inside that clean, non-overlapping gap, so every "
+            "answerable case falls below it and every out-of-domain one above.",
+        ],
+        size=Pt(30),
+    )
+    add_stats(
+        s[11],
+        [
+            ("100%", "Hit@1 on every answerable query"),
+            ("1.000", "MRR@5 — the right case ranked first"),
+            ("100%", "correct abstention on out-of-domain"),
+        ],
+        top=Inches(3.4),
+    )
+
+    # 13 -- why hybrid search (architecture trade-off) -----------------------
+    set_lines(by_name(s[12], "TextBox 6"), ["Why hybrid search"])
+    add_body(
+        s[12],
+        [
+            "Meaning search finds paraphrase — “the screen won't come on” "
+            "matches “no display” — but it blurs exact model numbers: G2 and "
+            "G3 sit almost on top of each other.",
+            "Keyword search catches exact identifiers and part numbers, but on "
+            "its own misses paraphrase — 71% Hit@1.",
+            "We fuse the two with Reciprocal Rank Fusion. Each covers the "
+            "other's blind spot, and the combined engine is what ships.",
+        ],
+        size=Pt(30),
+    )
+    add_stats(
+        s[12],
+        [
+            ("71% → 100%", "paraphrase Hit@1:\nkeyword-only  →  fused engine"),
+            ("2-in-1", "meaning + exact keywords,\nmerged by rank (RRF)"),
+        ],
+        top=Inches(4.0),
+    )
+
+    # 14 -- separator 03 -----------------------------------------------------
+    set_number(by_name(s[13], "TextBox 8"), "03")
+    set_lines(by_name(s[13], "TextBox 7"), ["The Experience"])
+
+    # 15 -- bilingual --------------------------------------------------------
+    set_lines(by_name(s[14], "TextBox 6"), ["Fully bilingual"])
+    add_body(
+        s[14],
         [
             "One toggle switches the entire interface between English and "
             "Arabic — including a true right-to-left layout — and the choice "
@@ -332,12 +465,12 @@ def build() -> None:
             "fallback.",
         ],
     )
-    add_image(s[11], "slide-15-arabic-rtl.png")
+    add_image(s[14], "slide-15-arabic-rtl.png")
 
-    # 13 -- theming + responsive ---------------------------------------------
-    set_lines(by_name(s[12], "TextBox 6"), ["Light and dark"])
+    # 16 -- theming + responsive ---------------------------------------------
+    set_lines(by_name(s[15], "TextBox 6"), ["Light and dark"])
     add_body(
-        s[12],
+        s[15],
         [
             "One click re-themes the whole application; it follows the "
             "operating system by default and remembers an explicit choice.",
@@ -350,16 +483,16 @@ def build() -> None:
         ],
         size=Pt(30),
     )
-    add_image(s[12], "slide-16-dark-mode.png", top=Inches(3.2), max_w=Inches(10.4))
+    add_image(s[15], "slide-16-dark-mode.png", top=Inches(3.2), max_w=Inches(10.4))
     add_image(
-        s[12], "slide-17b-mobile-drawer.png",
+        s[15], "slide-17b-mobile-drawer.png",
         left=Inches(23.2), top=Inches(3.2), max_w=Inches(3.0),
     )
 
-    # 14 -- accounts ---------------------------------------------------------
-    set_lines(by_name(s[13], "TextBox 6"), ["Your account"])
+    # 17 -- accounts ---------------------------------------------------------
+    set_lines(by_name(s[16], "TextBox 6"), ["Your account"])
     add_body(
-        s[13],
+        s[16],
         [
             "Engineers create an account and stay signed in — a refresh never "
             "signs you out mid-job.",
@@ -367,17 +500,17 @@ def build() -> None:
             "Sign-in is protected against repeated password guessing.",
         ],
     )
-    add_image(s[13], "slide-14-auth-signin.png")
+    add_image(s[16], "slide-14-auth-signin.png")
 
-    # 15 -- thank you --------------------------------------------------------
-    set_lines(by_name(s[14], "TextBox 17"), ["Thank you"])
+    # 18 -- thank you --------------------------------------------------------
+    set_lines(by_name(s[17], "TextBox 17"), ["Thank you"])
 
     # transitions ------------------------------------------------------------
-    # Fade throughout, with a push on the two section separators so a section
+    # Fade throughout, with a push on the three section separators so a section
     # change reads as a change. Deliberately restrained: this is a template
     # deck, not a showreel.
     for i, slide in enumerate(s, start=1):
-        set_transition(slide, "push" if i in (2, 7, 11) else "fade")
+        set_transition(slide, "push" if i in (3, 8, 14) else "fade")
 
     prs.save(OUT)
     print(f"[deck] wrote {OUT}  ({len(s.__iter__.__self__._sldIdLst)} slides)")

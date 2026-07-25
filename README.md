@@ -102,7 +102,7 @@ uv run uvicorn backend.main:app --reload --port 8000
 ### Key design points
 - **`/chat` never crashes on LLM failure** — falls back to a plain retrieval-only message if Gemini is
   unavailable (no key, rate limit, network).
-- **Distance-threshold grounding guard** (`GOOD_MATCH_MAX_DISTANCE = 0.65` in `main.py`) — Gemini is never
+- **Distance-threshold grounding guard** (`GOOD_MATCH_MAX_DISTANCE = 0.735` in `main.py`) — Gemini is never
   shown a retrieved case whose cosine distance says it isn't actually relevant. This is enforced in code,
   not just prompted for.
 - **Non-English queries are translated before retrieval** (`backend/llm.py::translate_to_english`) — MiniLM

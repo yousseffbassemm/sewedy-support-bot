@@ -219,12 +219,13 @@ class ChatResponse(BaseModel):
 
 
 # A retrieved case counts as a genuine match only below this cosine distance.
-# Based on real numbers seen during Day 2 testing: true matches for this
-# corpus land around 0.37-0.59; unrelated/out-of-domain queries land around
-# 0.85-0.93. This cutoff sits in the gap between them. It's a judgment call
-# from a small sample, not a universal constant -- tune it if real usage
-# shows it's too strict or too loose.
-GOOD_MATCH_MAX_DISTANCE = 0.65
+# Data-derived, not guessed: over the 15-query gold set (eval/eval_retriever),
+# every answerable query's correct case lands at distance <= 0.582, while every
+# out-of-domain query's *closest* case lands at distance >= 0.874. That is a
+# clean, non-overlapping gap; 0.735 is its midpoint -- the natural separator
+# between "answerable" and "should abstain". Re-derive it with
+# `uv run python -m eval.eval_retriever` if the corpus changes.
+GOOD_MATCH_MAX_DISTANCE = 0.735
 
 
 # Referring expressions that mean a message is leaning on an earlier turn

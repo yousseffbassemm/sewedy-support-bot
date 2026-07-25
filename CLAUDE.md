@@ -45,7 +45,9 @@ whether continued extension or consolidating/presenting what exists is the bette
 - Duplicates found: 0
 - Embedding provider: `local` (MiniLM, `all-MiniLM-L6-v2`), 384-dim
 - Vector store: ChromaDB, persistent, `data/chroma/`, collection `support_cases`
-- Answer generation: Gemini (`gemini-2.5-flash`), thinking disabled, grounding threshold 0.65 cosine distance
+- Answer generation: Gemini (`gemini-2.5-flash`), thinking disabled, grounding threshold 0.735 cosine
+  distance — data-derived, not guessed: answerable gold-set queries land ≤0.582, out-of-domain ≥0.874,
+  and 0.735 is the midpoint of that clean gap (was a conservative 0.65; moved to the derived value).
 - Tests: 64/64 passing (`test_ingest.py` + `test_retrieve.py` + `test_backend.py`)
 - Retriever eval (`eval/eval_set_public.json`, 15 queries): hybrid engine 100% Hit@1 on identifier
   and paraphrase queries, 100% out-of-domain rejection, MRR@5 = 1.000. Run: `uv run python -m eval.eval_retriever`.

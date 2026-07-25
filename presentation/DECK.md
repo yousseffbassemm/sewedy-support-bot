@@ -1,7 +1,8 @@
 # SupportBot deck — how it's built
 
-`SupportBot.pptx` (10 slides) is generated, not hand-made, so it can be rebuilt
-after any copy or screenshot change.
+`SupportBot.pptx` (18 slides) is generated, not hand-made, so it can be rebuilt
+after any copy or screenshot change. The byline is a single constant (`BYLINE`
+near the top of `build_deck.py`) — edit it to add the full team, then rebuild.
 
 ## Rebuild
 
@@ -31,11 +32,12 @@ are the tracked source of truth.
 
 To rebuild `structure.pptx` from scratch, see the COM snippet in the project
 history — it duplicates template slides in the order
-`1,3,2,2,2,2,3,2,2,2,3,2,2,2,4` (cover, separator, white ×4, separator,
-white ×3, separator, white ×3, thank-you) and deletes the four originals.
-**If you change the running order, update both that array and the separator
-indices in `set_transition` at the bottom of `build_deck.py`** — they are the
-same positions (currently 2, 7, 11) and will silently disagree otherwise.
+`1, 2, 3, 2,2,2,2, 3, 2,2,2,2,2, 3, 2,2,2, 4` (cover, problem, separator,
+white ×4, separator, white ×5, separator, white ×3, thank-you) and deletes the
+four originals. **If you change the running order, update both that array and
+the separator indices in `set_transition` at the bottom of `build_deck.py`** —
+they are the same positions (currently 3, 8, 14) and will silently disagree
+otherwise.
 
 ## The template rule
 
@@ -63,25 +65,38 @@ clear of the template's graphics:
 Hence `BODY_LEFT=2.6in`, `IMG_TOP=3.0in`, `IMG_BOTTOM_LIMIT=11.4in`,
 `IMG_RIGHT_LIMIT=26.6in`.
 
-## Running order (15 slides, 3 sections)
+## Running order (18 slides, 3 sections)
 
 | # | Slide | Screenshot |
 |---|---|---|
-| 1 | SupportBot (cover) | — |
-| 2 | **01 · The Product** | — |
-| 3 | Find the fix | landing hero |
-| 4 | Cited answers | grounded answer |
-| 5 | It remembers | follow-up memory |
-| 6 | Shows its work | embedding map |
-| 7 | **02 · Trust** | — |
-| 8 | Stays in scope | out-of-scope refusal |
-| 9 | Small talk | small talk |
-| 10 | Always answers | offline fallback |
-| 11 | **03 · The Experience** | — |
-| 12 | Fully bilingual | Arabic RTL |
-| 13 | Light and dark | dark mode + mobile drawer |
-| 14 | Your account | sign-in |
-| 15 | Thank you | — |
+| 1 | SupportBot (cover + author byline) | — |
+| 2 | The problem | — (stat callout) |
+| 3 | **01 · The Product** | — |
+| 4 | Find the fix | landing hero |
+| 5 | Cited answers | grounded answer |
+| 6 | It remembers | follow-up memory |
+| 7 | Shows its work | embedding map |
+| 8 | **02 · Trust** | — |
+| 9 | Stays in scope | out-of-scope refusal |
+| 10 | Small talk | small talk |
+| 11 | Always answers | offline fallback |
+| 12 | How we measured it | — (stat callouts) |
+| 13 | Why hybrid search | — (stat callouts) |
+| 14 | **03 · The Experience** | — |
+| 15 | Fully bilingual | Arabic RTL |
+| 16 | Light and dark | dark mode + mobile drawer |
+| 17 | Your account | sign-in |
+| 18 | Thank you | — |
+
+Slides 2, 12 and 13 were added on mentor feedback: frame the problem, show the
+measurement discipline (Gold Set / Hit@k / MRR / the derived abstention
+threshold), and state the retrieval architecture trade-off. They carry no
+screenshot — instead they use `add_stats` big-number callouts. **Every number
+on them is real:** the recurrence stat is measured from `data/cases_clean.jsonl`
+(22 of 66 cases repeat a problem), and the retrieval metrics reproduce from
+`uv run python -m eval.eval_retriever`. The abstention threshold on slide 12
+(0.735) is the value actually deployed in `backend/main.py` — code, eval and
+deck all agree.
 
 **Feature audit.** The body copy names, across slides 3-14: plain-language
 search, 66 cases over 7 products and 8 issue categories, the product-name

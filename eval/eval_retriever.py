@@ -10,7 +10,7 @@ Metrics, per query type and overall:
   - Hit@1 / Hit@3 / Hit@5 : is a gold case in the top-N?
   - MRR@5                  : 1 / rank of the first gold hit (0 if none in top-5)
   - Product P@1 (id only)  : does top-1's product == the named product?
-  - Rejection (ood only)   : correctly returns NO grounded hit (all dist > 0.65)?
+  - Rejection (ood only)   : correctly returns NO grounded hit (all dist > 0.735)?
 
 All three public searches are run (semantic, keyword, hybrid). `hybrid` is what
 backend/main.py actually serves, so the script EXITS NON-ZERO if hybrid is less
@@ -30,7 +30,7 @@ from pathlib import Path
 from rag.config import load_config
 from rag.retrieve import semantic_search, keyword_search, hybrid_search
 
-GOOD_MATCH_MAX_DISTANCE = 0.65  # mirrors backend/main.py's grounding threshold
+GOOD_MATCH_MAX_DISTANCE = 0.735  # mirrors backend/main.py's grounding threshold
 EVAL_PATH = Path(__file__).with_name("eval_set_public.json")
 
 # Gold case_ids per query, read off data/cases_clean.jsonl by symptom cluster.
