@@ -124,9 +124,11 @@ Hence `CONTENT_TOP=3.0in`, `IMG_BOTTOM_LIMIT=11.4in` (right column),
 **Vertical centring.** Body text is put in a box spanning the whole content
 band and middle-anchored (`MSO_ANCHOR.MIDDLE`), so short copy sits at the
 optical centre instead of clinging to the top; images and stat callouts are
-centred in the same band. **Every screenshot gets a soft drop shadow** via
+centred in the same band. **Every screenshot gets a firm drop shadow** via
 `_add_shadow` (python-pptx has no shadow API, so the `a:outerShdw` element is
-appended to the picture's `spPr` by hand — valid as the last child).
+appended to the picture's `spPr` by hand — valid as the last child). The
+shadow is deliberately strong — ~9pt blur, ~6pt straight-down offset, black at
+45% alpha — so the screenshots read as clearly lifted off the white page.
 
 ## Running order (19 slides, 3 sections)
 
@@ -148,16 +150,18 @@ appended to the picture's `spPr` by hand — valid as the last child).
 | 14 | **03 · The Experience** | — |
 | 15 | Fully bilingual | Arabic RTL |
 | 16 | Light and dark | dark mode (theming only) |
-| 17 | On any screen | mobile chat (captured live, demo account) |
+| 17 | On any screen | three mobile views: landing, chat, drawer (captured live @3×, demo account) |
 | 18 | Your account | sign-in |
 | 19 | Thank you | — |
 
 Slide 16 (theming) and 17 (mobile) used to be one combined slide; they were
-split on request so responsive/mobile stands on its own, with a fresh mobile
-chat screenshot captured at phone-width on a clean demo account (`slide-19-
-mobile-chat.png`). One phone, not two — the older drawer/landing mobile shots
-carry a personal name/email, so pairing them next to the clean chat shot looked
-inconsistent.
+split so responsive/mobile stands on its own. Slide 17 shows **three** phone
+views side by side via `add_image_row` — landing, a grounded chat answer, and
+the slide-in drawer (`slide-19-mobile-landing.png` / `-chat.png` / `-drawer.png`).
+All three were captured live at 390×844 **@ device-scale-factor 3** (→ crisp
+1170×2532 PNGs) on one clean demo account ("Kareem"), so they read as the same
+app and carry no personal name/email. The older `slide-17-mobile-*.png` shots
+are superseded — they were 2× and tied to a personal account.
 
 Slides 2, 12 and 13 were added on mentor feedback: frame the problem, show the
 measurement discipline (Gold Set / Hit@k / MRR / the derived abstention

@@ -161,9 +161,9 @@ def _add_shadow(pic) -> None:
 
     python-pptx has no shadow API, so the effect element is added by hand. In
     a picture's spPr the sequence ends xfrm, prstGeom, [ln], effectLst -- so
-    appending effectLst last is valid order. Values are EMU: ~5pt blur, ~3pt
-    offset straight down (dir 5400000 = 90deg), black at 32% alpha -- enough to
-    lift the screenshot off the white page without looking heavy.
+    appending effectLst last is valid order. Values are EMU: ~9pt blur, ~6pt
+    offset straight down (dir 5400000 = 90deg), black at 45% alpha -- a firm,
+    clearly-visible shadow that lifts the screenshot well off the white page.
     """
     spPr = pic._element.spPr
     for old in spPr.findall(qn("a:effectLst")):
@@ -171,10 +171,10 @@ def _add_shadow(pic) -> None:
     effect_lst = spPr.makeelement(qn("a:effectLst"), {})
     shadow = effect_lst.makeelement(
         qn("a:outerShdw"),
-        {"blurRad": "63500", "dist": "38100", "dir": "5400000", "rotWithShape": "0"},
+        {"blurRad": "114300", "dist": "76200", "dir": "5400000", "rotWithShape": "0"},
     )
     color = shadow.makeelement(qn("a:srgbClr"), {"val": "000000"})
-    alpha = color.makeelement(qn("a:alpha"), {"val": "32000"})
+    alpha = color.makeelement(qn("a:alpha"), {"val": "45000"})
     color.append(alpha)
     shadow.append(color)
     effect_lst.append(shadow)
@@ -206,6 +206,38 @@ def add_image(slide, filename: str, left=None, top=None, max_w=None, max_h=None)
     pic = slide.shapes.add_picture(str(path), left, top, width=width, height=height)
     _add_shadow(pic)
     return pic
+
+
+def add_image_row(slide, filenames, gap=Inches(0.5)):
+    """Place several screenshots in one centred, equal-height row, each with a
+    drop shadow. Used on the mobile slide to show multiple phone views side by
+    side. Every image is scaled to a common height; if the row would overflow
+    the image band's width, the shared height shrinks until it fits."""
+    band_left, band_right = IMG_LEFT, IMG_RIGHT_LIMIT
+    band_top, band_bottom = CONTENT_TOP, IMG_BOTTOM_LIMIT
+    avail_w, avail_h = (band_right - band_left), (band_bottom - band_top)
+
+    ars = []
+    for f in filenames:
+        with Image.open(SHOTS / f) as im:
+            ars.append(im.size[0] / im.size[1])
+
+    def row_width(h):
+        return sum(h * a for a in ars) + gap * (len(filenames) - 1)
+
+    height = avail_h
+    if row_width(height) > avail_w:
+        height = (avail_w - gap * (len(filenames) - 1)) / sum(ars)
+
+    x = band_left + (avail_w - row_width(height)) / 2
+    top = band_top + (avail_h - height) / 2
+    for f, a in zip(filenames, ars):
+        w = int(height * a)
+        pic = slide.shapes.add_picture(
+            str(SHOTS / f), Emu(int(x)), Emu(int(top)), width=Emu(w), height=Emu(int(height))
+        )
+        _add_shadow(pic)
+        x = x + w + gap
 
 
 def add_credits(slide, byline: str, footer: str) -> None:
@@ -543,9 +575,18 @@ def build() -> None:
             "menu button top-left, that opens from the correct side in Arabic.",
         ],
     )
-    # A single real mobile-chat screenshot (captured live on a phone-width
-    # viewport, demo account), centred in the right half with a drop shadow.
-    add_image(s[16], "slide-19-mobile-chat.png", left=Inches(17.5), max_w=Inches(3.9))
+    # Three real phone-width screenshots (captured live at 390x844 @3x on a
+    # clean demo account) shown side by side: the landing hero, a grounded
+    # chat answer, and the slide-in navigation drawer. One consistent account
+    # across all three, so they read as the same app on a phone.
+    add_image_row(
+        s[16],
+        [
+            "slide-19-mobile-landing.png",
+            "slide-19-mobile-chat.png",
+            "slide-19-mobile-drawer.png",
+        ],
+    )
 
     # 18 -- accounts ---------------------------------------------------------
     set_lines(by_name(s[17], "TextBox 6"), ["Your account"])
