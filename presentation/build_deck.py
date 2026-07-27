@@ -405,8 +405,8 @@ def build() -> None:
         [
             "A 15-query Gold Set — 5 exact-identifier, 7 paraphrase, 3 "
             "out-of-domain — each hand-labelled with its correct case.",
-            "Against those labels we measured Hit@1, Hit@3, Hit@5 and MRR@5 — "
-            "real retrieval scores, not impressions.",
+            "Hit@1, Hit@3, Hit@5 and MRR@5 against those labels — re-run in CI "
+            "on every commit, so the score is reproducible, not a one-off.",
             "The abstention cutoff is derived, not guessed: answerable cases "
             "land at distance ≤ 0.582, out-of-domain at ≥ 0.874. We set it at "
             "0.735 — inside that clean, non-overlapping gap, so every "
@@ -429,23 +429,25 @@ def build() -> None:
     add_body(
         s[12],
         [
-            "Meaning search finds paraphrase — “the screen won't come on” "
-            "matches “no display” — but it blurs exact model numbers: G2 and "
-            "G3 sit almost on top of each other.",
-            "Keyword search catches exact identifiers and part numbers, but on "
-            "its own misses paraphrase — 71% Hit@1.",
-            "We fuse the two with Reciprocal Rank Fusion. Each covers the "
-            "other's blind spot, and the combined engine is what ships.",
+            "Meaning-search alone already scores 100% here — it handles "
+            "paraphrase well. But it blurs exact model numbers: G2 and G3 sit "
+            "almost on top of each other in vector space.",
+            "Keyword-search keeps those identifiers distinct, yet on its own "
+            "misses paraphrase — 71% Hit@1.",
+            "We run both and fuse by rank (RRF). Hybrid keeps each one's "
+            "strength and trades away neither — we run it for exact-identifier "
+            "robustness, not because fusion beats meaning-search on this set.",
         ],
         size=Pt(30),
     )
     add_stats(
         s[12],
         [
-            ("71% → 100%", "paraphrase Hit@1:\nkeyword-only  →  fused engine"),
-            ("2-in-1", "meaning + exact keywords,\nmerged by rank (RRF)"),
+            ("100%", "meaning-only Hit@1 — strong on paraphrase"),
+            ("71%", "keyword-only Hit@1 — misses paraphrase"),
+            ("100%", "hybrid — keeps both strengths"),
         ],
-        top=Inches(4.0),
+        top=Inches(3.4),
     )
 
     # 14 -- separator 03 -----------------------------------------------------

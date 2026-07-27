@@ -4,6 +4,62 @@
 after any copy or screenshot change. The byline is a single constant (`BYLINE`
 near the top of `build_deck.py`) — edit it to add the full team, then rebuild.
 
+## Defending the metrics live (slides 12–13) — READ BEFORE PRESENTING
+
+A technical reviewer will hear "100% Hit@1, MRR@5 = 1.000, 100% abstention" and
+ask: *"A perfect score? Walk me through how."* Here is the honest, reproducible
+answer — rehearse it, because a confident, caveated answer earns credibility and
+a defensive one loses it.
+
+**Reproduce it in front of them (one command):**
+```
+uv run python -m eval.eval_retriever
+```
+It prints per-query results for all three engines and a PASS/FAIL gate. The same
+command runs in GitHub Actions on **every commit** — so the number is not a
+one-off on one laptop; CI has re-derived it green every push.
+
+**"Walk me through the perfect score":**
+- It's a **15-query gold set over a 66-case corpus** — 5 exact-identifier, 7
+  paraphrase, 3 out-of-domain. It's a **regression gate**, not a benchmark
+  leaderboard. Perfect on it means "no regressions on the cases we care about
+  and correct abstention", not "retrieval is flawless in general".
+- The gold labels are **objective**, tied to the case text: q6 "the numbers keep
+  creeping upward" is labelled with the cases whose problem literally reads
+  "Readings drift higher over time". They are not "whatever the retriever
+  returned" — that would be circular; these are the semantically correct cases.
+- Several **paraphrase queries have several valid answers**, because the same
+  fault genuinely recurs across products (the 1-in-3 recurrence from slide 2).
+  "Temperature reading is offset" matches five cases across five products;
+  ranking any one of them first is a correct hit. That is realistic, and it is
+  why Hit@1 is achievable — say so plainly rather than hide it.
+
+**"Earlier runs showed ~0.77 MRR and a paraphrase miss — why is it 1.000 now?"**
+Two real engineering changes closed that gap, both in commit `32dd604`:
+1. A **BM25 stopword filter** fixed a fusion regression on q11 ("device is
+   completely dead") where filler tokens ("device"/"unit") cast spurious
+   keyword votes. That is the "known paraphrase miss".
+2. **Nine resolution-less cases were completed** and re-indexed (57 → 66
+   searchable), which also gave the recurring-fault paraphrases more valid
+   targets.
+The ~0.77 figure is what **keyword-only (BM25)** still scores on paraphrase
+today (MRR@5 = 0.714) — so it is real, and it is exactly why we do not ship
+BM25 alone. Show that row.
+
+**"If semantic-only is already 100%, why hybrid?"** (slide 13 answers this
+honestly and you must too):
+- On this gold set, **semantic-only also scores 100% / MRR 1.000**. Hybrid does
+  **not** beat it here. Do not claim it does.
+- We run hybrid for **robustness on exact model/part numbers** — G2 vs G3 sit
+  almost on top of each other in embedding space, and BM25's exact tokens keep
+  them distinct. Hybrid keeps semantic's paraphrase recall *and* that exact-match
+  safety, trading away neither. That is a design choice for the real world, not
+  a scoreboard win — slide 13 says exactly this.
+
+**The one thing not to say:** never present MRR = 1.000 as evidence the system
+is "solved". It is evidence the gate is green. If asked about scale, be honest:
+the next step is a larger, independently-labelled evaluation set.
+
 ## Rebuild
 
 ```bash
