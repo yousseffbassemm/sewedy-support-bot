@@ -26,6 +26,8 @@ from pathlib import Path
 from PIL import Image
 from pptx import Presentation
 from pptx.dml.color import RGBColor
+from pptx.enum.text import MSO_ANCHOR
+from pptx.oxml.ns import qn
 from pptx.util import Emu, Inches, Pt
 from lxml import etree
 
@@ -42,12 +44,17 @@ SHOTS = ROOT / "screenshots"
 # below y=2.6in), the WEDY.AI mark (bottom left) and the red network graphic
 # (bottom right, from roughly x=21.5in / y=11.5in).
 BODY_LEFT = Inches(2.6)
-BODY_TOP = Inches(3.0)
 BODY_WIDTH = Inches(9.0)
-BODY_HEIGHT = Inches(8.0)
 
-IMG_TOP = Inches(3.0)
-IMG_BOTTOM_LIMIT = Inches(11.4)   # keeps clear of the bottom-right graphic
+# The vertical band our content lives in: below the title (which can wrap to
+# two lines, ending ~2.6in) and above the bottom-corner marks. Body text and
+# images are CENTRED in this band rather than pinned to the top, so a slide
+# reads as balanced instead of top-heavy. Text may sit a little lower than
+# images because the WEDY.AI mark (bottom-left) is lower than the network
+# graphic (bottom-right).
+CONTENT_TOP = Inches(3.0)
+CONTENT_BOTTOM_TEXT = Inches(12.6)   # left column, clears the WEDY.AI mark
+IMG_BOTTOM_LIMIT = Inches(11.4)      # right column, clears the network graphic
 IMG_RIGHT_LIMIT = Inches(26.6)
 IMG_LEFT = Inches(12.4)
 
@@ -58,7 +65,7 @@ RED = RGBColor(0xE5, 0x1B, 0x29)
 
 # Author byline on the cover. One place to edit -- replace with the full team,
 # e.g. "Built by Youssef Bassem, <name>, <name>".
-BYLINE = "Built by Youssef Bassem"
+BYLINE = "Built by Youssef Bassem, Mahmoud Alsayed & Somaya Ahmed"
 
 
 # ---------------------------------------------------------------------------
@@ -125,15 +132,19 @@ def by_name(slide, name: str):
 
 
 def add_body(slide, bullets: list[str], size=None) -> None:
-    """Our own body copy, placed in the white slide's empty canvas.
+    """Our own body copy, vertically centred in the content band.
 
-    `size` drops a couple of points on the slides carrying four bullets, so
-    they stay inside the same safe area as the three-bullet ones.
+    The text box spans the whole band and is middle-anchored, so short copy
+    sits at the optical centre of the slide instead of clinging to the top.
+    `size` drops a couple of points on the four-bullet slides.
     """
     size = size or BODY_SIZE
-    box = slide.shapes.add_textbox(BODY_LEFT, BODY_TOP, BODY_WIDTH, BODY_HEIGHT)
+    box = slide.shapes.add_textbox(
+        BODY_LEFT, CONTENT_TOP, BODY_WIDTH, Emu(CONTENT_BOTTOM_TEXT - CONTENT_TOP)
+    )
     tf = box.text_frame
     tf.word_wrap = True
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
     for i, text in enumerate(bullets):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         run = p.add_run()
@@ -145,24 +156,56 @@ def add_body(slide, bullets: list[str], size=None) -> None:
         p.space_after = Pt(22)
 
 
+def _add_shadow(pic) -> None:
+    """Give a picture a soft drop shadow.
+
+    python-pptx has no shadow API, so the effect element is added by hand. In
+    a picture's spPr the sequence ends xfrm, prstGeom, [ln], effectLst -- so
+    appending effectLst last is valid order. Values are EMU: ~5pt blur, ~3pt
+    offset straight down (dir 5400000 = 90deg), black at 32% alpha -- enough to
+    lift the screenshot off the white page without looking heavy.
+    """
+    spPr = pic._element.spPr
+    for old in spPr.findall(qn("a:effectLst")):
+        spPr.remove(old)
+    effect_lst = spPr.makeelement(qn("a:effectLst"), {})
+    shadow = effect_lst.makeelement(
+        qn("a:outerShdw"),
+        {"blurRad": "63500", "dist": "38100", "dir": "5400000", "rotWithShape": "0"},
+    )
+    color = shadow.makeelement(qn("a:srgbClr"), {"val": "000000"})
+    alpha = color.makeelement(qn("a:alpha"), {"val": "32000"})
+    color.append(alpha)
+    shadow.append(color)
+    effect_lst.append(shadow)
+    spPr.append(effect_lst)
+
+
 def add_image(slide, filename: str, left=None, top=None, max_w=None, max_h=None):
-    """Place a screenshot, scaled to fit inside the safe canvas."""
+    """Place a screenshot, scaled to fit and vertically centred in the image
+    band, with a soft drop shadow. An explicit `top` opts out of centring
+    (used when two images share a row)."""
     path = SHOTS / filename
     with Image.open(path) as im:
         ar = im.size[0] / im.size[1]
 
-    top = IMG_TOP if top is None else top
-    max_h = (IMG_BOTTOM_LIMIT - top) if max_h is None else max_h
     left = IMG_LEFT if left is None else left
     max_w = (IMG_RIGHT_LIMIT - left) if max_w is None else max_w
+    band_top = CONTENT_TOP if top is None else top
+    avail_h = (IMG_BOTTOM_LIMIT - band_top) if max_h is None else max_h
 
     width = max_w
     height = Emu(int(width / ar))
-    if height > max_h:
-        height = max_h
+    if height > avail_h:
+        height = Emu(int(avail_h))
         width = Emu(int(height * ar))
 
-    return slide.shapes.add_picture(str(path), left, top, width=width, height=height)
+    # Centre within the band unless the caller pinned a top.
+    top = band_top if top is not None else Emu(int(CONTENT_TOP + (avail_h - height) / 2))
+
+    pic = slide.shapes.add_picture(str(path), left, top, width=width, height=height)
+    _add_shadow(pic)
+    return pic
 
 
 def add_credits(slide, byline: str, footer: str) -> None:
@@ -184,10 +227,16 @@ def add_credits(slide, byline: str, footer: str) -> None:
         p.space_after = Pt(8)
 
 
-def add_stats(slide, items: list[tuple[str, str]], left=Inches(15.4), top=Inches(3.6)) -> None:
+def add_stats(slide, items: list[tuple[str, str]], left=Inches(15.4), top=None) -> None:
     """Big-number callouts stacked down the right half, for the data slides
     (metrics, architecture) that carry no screenshot. Each item is
-    (big_number, caption): the number in brand red, the caption in grey."""
+    (big_number, caption): the number in brand red, the caption in grey. The
+    stack is vertically centred in the image band by default, to match the
+    middle-anchored body text on the left."""
+    step = Inches(2.55)
+    if top is None:
+        stack_h = (len(items) - 1) * step + Inches(1.4)  # numbers + last caption
+        top = Emu(int(CONTENT_TOP + ((IMG_BOTTOM_LIMIT - CONTENT_TOP) - stack_h) / 2))
     y = top
     for big, caption in items:
         box = slide.shapes.add_textbox(left, y, Inches(10.4), Inches(2.5))
@@ -206,7 +255,7 @@ def add_stats(slide, items: list[tuple[str, str]], left=Inches(15.4), top=Inches
         r2.font.size = Pt(24)
         r2.font.name = BODY_FONT
         r2.font.color.rgb = BODY_COLOR
-        y = Emu(y + Inches(2.55))
+        y = Emu(y + step)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +333,6 @@ def build() -> None:
     add_stats(
         s[1],
         [("1 in 3", "resolved cases repeat a problem\nalready solved elsewhere")],
-        top=Inches(5.2),
     )
 
     # 3 -- separator 01 ------------------------------------------------------
@@ -421,7 +469,6 @@ def build() -> None:
             ("1.000", "MRR@5 — the right case ranked first"),
             ("100%", "correct abstention on out-of-domain"),
         ],
-        top=Inches(3.4),
     )
 
     # 13 -- why hybrid search (architecture trade-off) -----------------------
@@ -447,7 +494,6 @@ def build() -> None:
             ("71%", "keyword-only Hit@1 — misses paraphrase"),
             ("100%", "hybrid — keeps both strengths"),
         ],
-        top=Inches(3.4),
     )
 
     # 14 -- separator 03 -----------------------------------------------------
@@ -469,7 +515,7 @@ def build() -> None:
     )
     add_image(s[14], "slide-15-arabic-rtl.png")
 
-    # 16 -- theming + responsive ---------------------------------------------
+    # 16 -- theming + accessibility ------------------------------------------
     set_lines(by_name(s[15], "TextBox 6"), ["Light and dark"])
     add_body(
         s[15],
@@ -478,23 +524,33 @@ def build() -> None:
             "operating system by default and remembers an explicit choice.",
             "Every text and surface pairing was contrast-checked for "
             "accessibility in both themes.",
-            "The full experience works down to phone width, where the sidebar "
-            "becomes a slide-in drawer.",
             "Keyboard focus is visible throughout, and animation is reduced "
             "for anyone whose system asks for that.",
         ],
-        size=Pt(30),
     )
-    add_image(s[15], "slide-16-dark-mode.png", top=Inches(3.2), max_w=Inches(10.4))
-    add_image(
-        s[15], "slide-17b-mobile-drawer.png",
-        left=Inches(23.2), top=Inches(3.2), max_w=Inches(3.0),
-    )
+    add_image(s[15], "slide-16-dark-mode.png")
 
-    # 17 -- accounts ---------------------------------------------------------
-    set_lines(by_name(s[16], "TextBox 6"), ["Your account"])
+    # 17 -- responsive / mobile (its own slide, with a real mobile chat shot) -
+    set_lines(by_name(s[16], "TextBox 6"), ["On any screen"])
     add_body(
         s[16],
+        [
+            "The full experience runs down to phone width — where field "
+            "support actually happens.",
+            "Chat, cited answers and the case view reflow to a single column; "
+            "nothing is cut off.",
+            "The sidebar collapses into a slide-in drawer, reached from the "
+            "menu button top-left, that opens from the correct side in Arabic.",
+        ],
+    )
+    # A single real mobile-chat screenshot (captured live on a phone-width
+    # viewport, demo account), centred in the right half with a drop shadow.
+    add_image(s[16], "slide-19-mobile-chat.png", left=Inches(17.5), max_w=Inches(3.9))
+
+    # 18 -- accounts ---------------------------------------------------------
+    set_lines(by_name(s[17], "TextBox 6"), ["Your account"])
+    add_body(
+        s[17],
         [
             "Engineers create an account and stay signed in — a refresh never "
             "signs you out mid-job.",
@@ -502,10 +558,10 @@ def build() -> None:
             "Sign-in is protected against repeated password guessing.",
         ],
     )
-    add_image(s[16], "slide-14-auth-signin.png")
+    add_image(s[17], "slide-14-auth-signin.png")
 
-    # 18 -- thank you --------------------------------------------------------
-    set_lines(by_name(s[17], "TextBox 17"), ["Thank you"])
+    # 19 -- thank you --------------------------------------------------------
+    set_lines(by_name(s[18], "TextBox 17"), ["Thank you"])
 
     # transitions ------------------------------------------------------------
     # Fade throughout, with a push on the three section separators so a section
