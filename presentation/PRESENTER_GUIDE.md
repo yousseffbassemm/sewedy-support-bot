@@ -318,6 +318,30 @@ Saying step 5 unprompted is what separates a good presenter from a great one.
 
 ---
 
+## Plain-English glossary — every term on the deck
+
+If a mentor points at a word on a slide and asks "what does that mean?", say the
+**one line** next to it. Don't add more — the short answer sounds confident.
+
+| Term (on the slide) | Say exactly this |
+|---|---|
+| **Case / Case ID** | *"A past support ticket that was solved, and its ID number."* |
+| **By meaning (semantic search)** | *"It finds cases that mean the same thing, even if the words are different — 'won't turn on' finds 'does not power up.'"* |
+| **Keyword search** | *"It matches the exact words you type — good for model numbers, weak for wording."* |
+| **Hybrid search** | *"We use both — meaning search and keyword search — and merge the results."* |
+| **Grounded answer** | *"The answer is built from a real past case, not made up by the AI."* |
+| **Hit@1** | *"How often the correct case comes back as the number-one result. 100% means it was first every time."* |
+| **MRR@5** | *"A score for how high the right case ranks. 1.0 means it was always at the very top."* |
+| **Abstention / it refuses** | *"When nothing matches well enough, it chooses not to answer instead of guessing."* |
+| **Out-of-scope / out-of-domain** | *"A question the tool isn't meant to answer — like a general-knowledge question."* |
+| **Gold Set / test set** | *"Our fixed list of 15 questions with known correct answers, that we grade the system against."* |
+| **Distance** | *"How different two things are in meaning. Smaller distance means more similar."* |
+| **Threshold (0.735)** | *"The cutoff for 'close enough to answer.' Closer than this, it answers; further, it refuses."* |
+| **Embedding / embedding space** | *"Turning text into points, so things with similar meaning sit close together. That's the map on slide 7."* |
+| **CI (runs on every commit)** | *"An automatic check that re-runs all our tests every time we change the code, so nothing quietly breaks."* |
+
+---
+
 ## Tough-question cheat sheet
 
 | If they ask… | Say… |
