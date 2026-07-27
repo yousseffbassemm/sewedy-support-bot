@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SupportBot — Presenter Cheat Sheet</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    color: #1a1a1a; margin: 0; padding: 10px 14px;
+    font-size: 9.2px; line-height: 1.32;
+  }
+  h1 { font-size: 15px; margin: 0; color: #E30613; letter-spacing: .3px; }
+  .sub { font-size: 9px; color: #555; margin: 1px 0 7px; }
+  .pitch { font-style: italic; color: #333; margin: 0 0 8px; font-size: 9.4px; }
+  .cols { column-count: 3; column-gap: 14px; }
+  .s { break-inside: avoid; margin: 0 0 5px; }
+  .s b { color: #111; }
+  .s .n { color: #E30613; font-weight: 700; }
+  .sep { background: #fbe9ea; border-left: 3px solid #E30613; padding: 2px 5px;
+         font-weight: 700; color: #b00; }
+  .band { margin-top: 8px; border-top: 1.5px solid #E30613; padding-top: 6px;
+          display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; }
+  h2 { font-size: 10.5px; margin: 0 0 3px; color: #E30613;
+       text-transform: uppercase; letter-spacing: .4px; }
+  ul { margin: 0; padding-left: 14px; }
+  li { margin: 0 0 2px; break-inside: avoid; }
+  table { border-collapse: collapse; width: 100%; font-size: 8.6px; }
+  td { padding: 1.5px 4px; vertical-align: top; border-bottom: .5px solid #eee; }
+  td.t { font-weight: 700; color: #111; white-space: nowrap; }
+  .foot { margin-top: 7px; border-top: 1px dashed #bbb; padding-top: 5px;
+          font-style: italic; color: #333; }
+  .foot b { font-style: normal; color: #E30613; }
+</style>
+</head>
+<body>
+  <h1>SupportBot — Presenter Cheat Sheet</h1>
+  <div class="sub">Youssef Bassem · Mahmoud Alsayed · Somaya Ahmed &nbsp;|&nbsp; 19 slides · ~10–12 min &nbsp;|&nbsp; Rule: say the short line, then stop talking.</div>
+  <div class="pitch">SupportBot turns Elsewedy's resolved support cases into a shared memory any field engineer can search in plain language, in seconds.</div>
+
+  <div class="cols">
+    <div class="s"><span class="n">1. Cover.</span> We're Youssef, Mahmoud &amp; Somaya. SupportBot helps Elsewedy field engineers find a device fix in seconds, from past cases. <i>(2 sentences, stop.)</i></div>
+    <div class="s"><span class="n">2. The problem.</span> The fix usually exists — in an old ticket or a senior's head — but reaching it means asking around and waiting. <b>1 in 3</b> of our cases repeat a solved problem; knowledge leaves when people leave. SupportBot makes it searchable.</div>
+    <div class="s sep">01 · The Product — "First, what it does for an engineer."</div>
+    <div class="s"><span class="n">4. Find the fix.</span> Describe the problem in plain words. Searches <b>66 cases / 7 products / 8 categories by meaning, not keywords.</b> Type a product name → count of past cases. Suggested questions to start.</div>
+    <div class="s"><span class="n">5. Cited answers.</span> Every answer cites the exact case — ID, original problem, the <b>real</b> resolution. Copy it, or rate helpful / not helpful.</div>
+    <div class="s"><span class="n">6. It remembers.</span> Follow-ups understood in context ("does it happen on the X100 too?") — never restate the problem. Still cited.</div>
+    <div class="s"><span class="n">7. Shows its work.</span> "See how this was found" opens the search space — each dot a case, highlighted = what you matched. Shows <b>why</b>, doesn't ask for blind trust. <i>(Our signature feature — pause here.)</i></div>
+    <div class="s sep">02 · Trust — "Trust what it says, and what it refuses to say."</div>
+    <div class="s"><span class="n">9. Stays in scope.</span> Declines general-knowledge questions. If nothing matches, it says so — never dresses up an unrelated case as an answer.</div>
+    <div class="s"><span class="n">10. Small talk.</span> Warm reply to greetings, then steers back. <b>Never invents a fake Case ID</b> — citations appear only for real cases.</div>
+    <div class="s"><span class="n">11. Always answers.</span> If the AI writer is down, it still lists matching cases in full. Degrades gracefully — no error screen.</div>
+    <div class="s"><span class="n">12. How we measured it. ⭐</span> A <b>15-question test set</b> (5 model-number, 7 plain-words, 3 out-of-scope), each labelled with the correct case. Right case first every time; refuses every out-of-scope. Runs in CI. Cutoff <b>0.735</b> sits in the clear gap (answerable ≤0.582, out-of-scope ≥0.874).</div>
+    <div class="s"><span class="n">13. Why hybrid.</span> Meaning search = 100% but blurs G2/G3; keyword keeps exact numbers distinct but 71%. We merge both — for <b>exact-number robustness, honestly not a higher score</b> here.</div>
+    <div class="s sep">03 · The Experience — "What makes it usable on a real day."</div>
+    <div class="s"><span class="n">15. Fully bilingual.</span> One toggle → full English/Arabic, true right-to-left, remembered. Ask in Arabic → answer in Arabic. Proper Arabic font.</div>
+    <div class="s"><span class="n">16. Light and dark.</span> One click re-themes; follows the OS, remembers your choice. Contrast-checked, visible keyboard focus, reduced motion.</div>
+    <div class="s"><span class="n">17. On any screen.</span> Full experience down to phone width. Single column, nothing cut off. Sidebar → slide-in drawer; opens from the correct side in Arabic.</div>
+    <div class="s"><span class="n">18. Your account.</span> Real account, stay signed in through a refresh. Password reset by emailed code. Protected against repeated guessing.</div>
+    <div class="s"><span class="n">19. Thank you.</span> The company's own cases, a searchable memory in seconds. "Thank you — we'd love your questions." <b>Then stop and let them ask.</b></div>
+  </div>
+
+  <div class="band">
+    <div>
+      <h2>Defending the perfect score</h2>
+      <ul>
+        <li><b>Offer to run it live:</b> <code>uv run python -m eval.eval_retriever</code> — also runs in CI on every commit.</li>
+        <li>It's a <b>15-question safety check (regression gate), not a benchmark.</b> Correct answers are fixed to the case text, not to what the system returned.</li>
+        <li>Faults repeat across products → some questions have <b>several correct answers</b> → 100% is honest, not luck.</li>
+        <li><b>Earlier ~0.77:</b> fixed keyword filler-word scoring + completed 9 cases (57→66). Keyword-alone <b>still ~0.71</b> on paraphrase — exactly why we don't ship it alone.</li>
+        <li><b>Say the limit unprompted:</b> "Perfect means our test set is green, not that it's solved. Next step: a bigger, independently-labelled test set."</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Glossary — one line each</h2>
+      <table>
+        <tr><td class="t">Hit@1</td><td>How often the right case comes back #1. 100% = first every time.</td></tr>
+        <tr><td class="t">MRR@5</td><td>Score for how high the right case ranks. 1.0 = always at the top.</td></tr>
+        <tr><td class="t">Abstention</td><td>When nothing matches well, it chooses not to answer.</td></tr>
+        <tr><td class="t">Threshold 0.735</td><td>Cutoff for "close enough." Closer = answer; further = refuse.</td></tr>
+        <tr><td class="t">By meaning</td><td>Finds cases that mean the same even with different words.</td></tr>
+        <tr><td class="t">Embedding map</td><td>Text turned into points; similar meanings sit close (slide 7).</td></tr>
+        <tr><td class="t">CI</td><td>Auto-check that re-runs all tests on every code change.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="foot"><b>30-sec version:</b> Field engineers waste time re-solving problems the company already solved — 1 in 3 of our cases is a repeat. SupportBot lets any engineer describe a problem in plain language, English or Arabic, and get the exact past fix, with the case cited so they can trust it. It refuses when it doesn't know, shows its own reasoning, and we measured it: on our 15-question test set it returns the right case first every time and refuses every out-of-scope question — checked automatically on every code change.</div>
+</body>
+</html>
